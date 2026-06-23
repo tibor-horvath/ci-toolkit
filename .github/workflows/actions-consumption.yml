@@ -1,15 +1,37 @@
 name: Actions Consumption Report (reusable)
 
-# Stack-agnostic reporter: appends this run's billable minutes (per OS) to the
-# job summary. Add it as a dependent job after your CI:
+# Stack-agnostic reporter: posts a run's billable minutes (per OS) to the job
+# summary via the runs/{id}/timing REST endpoint.
+#
+# IMPORTANT: a run's billable time is finalized only AFTER it completes, so a
+# run cannot measure itself. Trigger this on the *completed* run via a tiny
+# workflow_run workflow in the consumer repo:
+#
+#   name: CI Consumption
+#   on:
+#     workflow_run:
+#       workflows: ["CI"]          # <- name of the workflow to measure
+#       types: [completed]
+#   permissions:
+#     actions: read
 #   jobs:
-#     usage:
-#       needs: [ci]
+#     report:
 #       uses: tibor-horvath/ci-toolkit/.github/workflows/actions-consumption.yml@v1
+#       with:
+#         run-id: ${{ github.event.workflow_run.id }}
+#       permissions:
+#         actions: read
 
 on:
   workflow_call:
     inputs:
+      run-id:
+        description: >-
+          Run ID to report on. Defaults to the current run — but a run cannot
+          see its own finalized billing, so pass a completed run's id
+          (github.event.workflow_run.id) for real numbers.
+        type: string
+        default: ""
       runs-on:
         description: "Runner label."
         type: string
@@ -23,30 +45,35 @@ jobs:
     name: Actions Consumption
     runs-on: ${{ inputs.runs-on }}
     steps:
-      - name: Report billable minutes for this run
+      - name: Report billable minutes
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          RUN_ID: ${{ github.run_id }}
+          RUN_ID: ${{ inputs.run-id != '' && inputs.run-id || github.run_id }}
         run: |
+          # `gh` and `jq` are preinstalled on GitHub-hosted runners.
+          # Billing can lag a few seconds after completion — poll briefly.
+          timing='{}'
+          for attempt in 1 2 3 4 5 6; do
+            timing=$(gh api "repos/${REPO}/actions/runs/${RUN_ID}/timing")
+            total=$(echo "$timing" | jq '[(.billable // {}) | .[].total_ms] | add // 0')
+            if [ "${total:-0}" -gt 0 ]; then break; fi
+            echo "Attempt ${attempt}: billable data not ready, waiting 10s…"
+            sleep 10
+          done
+
           {
             echo "## ⏱️ GitHub Actions consumption — run #${RUN_ID}"
             echo ""
-          } >> "$GITHUB_STEP_SUMMARY"
-
-          # `gh` and `jq` are preinstalled on GitHub-hosted runners.
-          timing=$(gh api "repos/${REPO}/actions/runs/${RUN_ID}/timing")
-
-          {
-            echo "| OS | Runtime (billable basis) |"
-            echo "|----|-------------------------:|"
+            echo "| OS | Jobs | Billable runtime |"
+            echo "|----|-----:|-----------------:|"
             echo "$timing" | jq -r '
-              if (.billable == null) or ((.billable | length) == 0) then
-                "| _not finalized yet_ | — |"
+              if ((.billable // {}) | length) == 0 then
+                "| _no billable data_ | — | — |"
               else
-                (.billable | to_entries[]
-                 | "| \(.key) | \(((.value.total_ms // 0) / 60000) | floor) min (\(.value.total_ms // 0) ms) |")
+                ((.billable) | to_entries[]
+                 | "| \(.key) | \(.value.jobs // 0) | \(((.value.total_ms // 0) / 60000) | floor) min (\(.value.total_ms // 0) ms) |")
               end'
             echo ""
             dur=$(echo "$timing" | jq -r '(.run_duration_ms // 0)')

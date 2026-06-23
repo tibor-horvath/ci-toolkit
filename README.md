@@ -39,15 +39,19 @@ test-reporter check) and pass `secrets: inherit` if private dependencies need au
 
 ### `.github/workflows/actions-consumption.yml`
 
-Stack-agnostic. Appends this run's billable minutes per OS to the job summary via the
-`runs/{id}/timing` REST endpoint (`gh api`, no extra action). Add as a dependent job.
+Stack-agnostic. Posts a run's billable minutes per OS to the job summary via the
+`runs/{id}/timing` REST endpoint (`gh api`, no extra action).
+
+> **A run cannot measure itself.** GitHub finalizes billable time only *after* a run
+> completes, so calling this as a job *inside* the run reports all zeros. Trigger it on
+> the **completed** run with a `workflow_run` workflow (see below) and pass that run's id.
 
 > The per-OS millisecond figures are raw runtime. GitHub applies billing multipliers
 > (Linux 1× · Windows 2× · macOS 10×) at invoice time — not reflected in the table.
 
 ## Caller examples
 
-**Sharded tests + consumption:**
+**Build + sharded tests:**
 
 ```yaml
 jobs:
@@ -60,9 +64,26 @@ jobs:
     permissions:
       checks: write
       contents: read
-  usage:
-    needs: [ci]
+```
+
+**Consumption report (separate workflow, fires after the CI run finishes):**
+
+```yaml
+# .github/workflows/ci-consumption.yml
+name: CI Consumption
+on:
+  workflow_run:
+    workflows: ["CI"] # must match the measured workflow's `name:`
+    types: [completed]
+permissions:
+  actions: read
+jobs:
+  report:
     uses: tibor-horvath/ci-toolkit/.github/workflows/actions-consumption.yml@v1
+    with:
+      run-id: ${{ github.event.workflow_run.id }}
+    permissions:
+      actions: read
 ```
 
 **Build-only (no test project):**
