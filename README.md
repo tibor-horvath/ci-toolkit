@@ -39,8 +39,9 @@ test-reporter check) and pass `secrets: inherit` if private dependencies need au
 
 ### `.github/workflows/actions-consumption.yml`
 
-Stack-agnostic. Posts a run's billable minutes per OS to the job summary via the
-`runs/{id}/timing` REST endpoint (`gh api`, no extra action).
+Stack-agnostic. Posts a run's billable minutes — broken down **by OS and by job** —
+to the job summary via the `runs/{id}/timing` and `runs/{id}/jobs` REST endpoints
+(`gh api`, no extra action).
 
 > **A run cannot measure itself.** GitHub finalizes billable time only *after* a run
 > completes, so calling this as a job *inside* the run reports all zeros. Trigger it on
@@ -48,6 +49,23 @@ Stack-agnostic. Posts a run's billable minutes per OS to the job summary via the
 
 > The per-OS millisecond figures are raw runtime. GitHub applies billing multipliers
 > (Linux 1× · Windows 2× · macOS 10×) at invoice time — not reflected in the table.
+
+**Optional account balance.** Pass a `billing_token` secret (a PAT — classic with
+`user` scope, or fine-grained with account **Plan: read-only**) to also report
+account-level **used / included / remaining** minutes. The built-in `GITHUB_TOKEN`
+can't read billing, so the section is skipped when no token is supplied:
+
+```yaml
+jobs:
+  report:
+    uses: tibor-horvath/ci-toolkit/.github/workflows/actions-consumption.yml@v1
+    with:
+      run-id: ${{ github.event.workflow_run.id }}
+    secrets:
+      billing_token: ${{ secrets.BILLING_TOKEN }}
+    permissions:
+      actions: read
+```
 
 ## Caller examples
 

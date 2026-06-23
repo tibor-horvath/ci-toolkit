@@ -36,6 +36,14 @@ on:
         description: "Runner label."
         type: string
         default: "ubuntu-latest"
+    secrets:
+      billing_token:
+        description: >-
+          Optional PAT to show account-level Actions minutes (used / included /
+          remaining). The built-in GITHUB_TOKEN cannot read billing. Classic PAT
+          needs `user` scope; fine-grained needs account "Plan" read-only. When
+          omitted, the account-usage section is skipped.
+        required: false
 
 permissions:
   actions: read
@@ -50,7 +58,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
           RUN_ID: ${{ inputs.run-id != '' && inputs.run-id || github.run_id }}
+          BILLING_TOKEN: ${{ secrets.billing_token }}
         run: |
           # `gh` and `jq` are preinstalled on GitHub-hosted runners.
           # Billing can lag a few seconds after completion — poll briefly.
@@ -63,9 +73,13 @@ jobs:
             sleep 10
           done
 
+          # Job id -> name map, to label the per-job breakdown.
+          jobs_json=$(gh api "repos/${REPO}/actions/runs/${RUN_ID}/jobs?per_page=100")
+
           {
             echo "## ⏱️ GitHub Actions consumption — run #${RUN_ID}"
             echo ""
+            echo "### By OS"
             echo "| OS | Jobs | Billable runtime |"
             echo "|----|-----:|-----------------:|"
             echo "$timing" | jq -r '
@@ -75,10 +89,43 @@ jobs:
                 ((.billable) | to_entries[]
                  | "| \(.key) | \(.value.jobs // 0) | \(((.value.total_ms // 0) / 60000) | floor) min (\(.value.total_ms // 0) ms) |")
               end'
+
+            echo ""
+            echo "### By job"
+            echo "| Job | OS | Runtime | Billed (rounded up) |"
+            echo "|-----|----|--------:|--------------------:|"
+            echo "$timing" | jq -r --argjson jobs "$jobs_json" '
+              (($jobs.jobs // []) | map({(.id|tostring): .name}) | add // {}) as $names
+              | (.billable // {}) | to_entries[]
+              | .key as $os | (.value.job_runs // [])[]
+              | (.duration_ms // 0) as $ms
+              | "| \($names[(.job_id|tostring)] // ("#" + (.job_id|tostring))) | \($os) | \(($ms/1000)|floor)s (\($ms) ms) | \((($ms + 59999)/60000)|floor) min |"'
+
             echo ""
             dur=$(echo "$timing" | jq -r '(.run_duration_ms // 0)')
             echo "_Wall-clock run duration: $((dur / 1000))s._"
             echo ""
-            echo "> Billing multipliers (Linux 1× · Windows 2× · macOS 10×) are applied"
-            echo "> by GitHub at invoice time and are **not** reflected in the ms above."
+            echo "> GitHub rounds **each job** up to the next whole minute and applies OS"
+            echo "> multipliers (Linux 1× · Windows 2× · macOS 10×) at invoice time. The"
+            echo "> \"Billed\" column shows the per-job rounding; multipliers are not applied here."
           } >> "$GITHUB_STEP_SUMMARY"
+
+          # Account-level remaining minutes (only if a billing PAT was provided).
+          if [ -n "${BILLING_TOKEN:-}" ]; then
+            {
+              echo ""
+              echo "### Account usage (Actions minutes)"
+            } >> "$GITHUB_STEP_SUMMARY"
+            if billing=$(GH_TOKEN="$BILLING_TOKEN" gh api "users/${OWNER}/settings/billing/actions" 2>/dev/null); then
+              echo "$billing" | jq -r '
+                (.included_minutes // 0) as $inc
+                | (.total_minutes_used // 0) as $used
+                | (.total_paid_minutes_used // 0) as $paid
+                | "| Included | Used | Remaining | Paid overage |",
+                  "|---------:|-----:|----------:|-------------:|",
+                  "| \($inc) min | \($used) min | \((($inc - $used)) | if . < 0 then 0 else . end) min | \($paid) min |"
+              ' >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "_Account billing unavailable — the token lacks Plan read access, or the account uses the newer metered billing platform (check the billing dashboard)._" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
