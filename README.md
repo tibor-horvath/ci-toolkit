@@ -57,10 +57,17 @@ platform. It's a close estimate, not the invoiced figure.
 > The per-OS millisecond figures are raw runtime. GitHub applies billing multipliers
 > (Linux 1× · Windows 2× · macOS 10×) at invoice time — not reflected in the table.
 
-**Optional account balance.** Pass a `billing_token` secret (a PAT — classic with
-`user` scope, or fine-grained with account **Plan: read-only**) to also report
-account-level **used / included / remaining** minutes. The built-in `GITHUB_TOKEN`
-can't read billing, so the section is skipped when no token is supplied:
+**Optional account usage.** Pass a `billing_token` secret to add an account-level
+Actions usage section (per-SKU minutes + net cost) from GitHub's enhanced billing
+usage API. Notes:
+
+- Must be a **classic** PAT with `Plan` read (`user` scope). The billing endpoints
+  do **not** accept fine-grained PATs, and the built-in `GITHUB_TOKEN` can't read
+  billing. Omit the secret to skip the section.
+- The usage API reports consumption, not your allowance. Set `included-minutes` to
+  your plan's monthly minutes (e.g. `2000` Free, `3000` Pro) to also show
+  **remaining**. Minutes are counted allowance-equivalent (Windows 2×, macOS 10×).
+- Requires an account on GitHub's enhanced/metered billing platform.
 
 ```yaml
 jobs:
@@ -68,6 +75,7 @@ jobs:
     uses: tibor-horvath/ci-toolkit/.github/workflows/actions-consumption.yml@v1
     with:
       run-id: ${{ github.event.workflow_run.id }}
+      included-minutes: 3000
     secrets:
       billing_token: ${{ secrets.BILLING_TOKEN }}
     permissions:
