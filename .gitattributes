@@ -1,0 +1,4 @@
+# Force LF for workflow files so `shell: bash` run-blocks never carry CRLF
+# onto Linux runners.
+*.yml text eol=lf
+*.yaml text eol=lf
