@@ -1,0 +1,59 @@
+# Changelog
+
+All notable changes to this project are documented here. The format is based on
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
+to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Consumers pin the
+moving major tag `@v1`.
+
+## [1.4.1] - 2026-06-23
+
+### Added
+- `LICENSE` (MIT) and this `CHANGELOG.md`.
+
+## [1.4.0] - 2026-06-23
+
+### Changed
+- **Unified `build` → `test` shape** for every caller. Replaced the dual-mode
+  design (a combined job for unsharded callers vs. split jobs for sharded ones)
+  with a single structure: one `build` job compiles once and uploads its output,
+  and the `test` job runs `--no-build`, fanning into parallel shards via
+  `test-matrix`. Removes the skipped "phantom" job that showed on sharded runs and
+  gives all consumers an identical run graph.
+
+## [1.3.0] - 2026-06-23
+
+### Added
+- **Per-job breakdown** in the consumption report (joins `runs/{id}/timing`
+  `job_runs` with the jobs API for names; shows raw runtime and per-job billed
+  minutes, rounded up to the minute).
+- Optional **account-balance** section (used / included / remaining) gated on a
+  `billing_token` secret. Skipped when no token is supplied, since the built-in
+  `GITHUB_TOKEN` cannot read billing.
+
+## [1.2.0] - 2026-06-23
+
+### Fixed
+- Consumption report no longer reports zeros. A run cannot read its own finalized
+  billing, so the reporter now takes a `run-id` input (intended for a
+  `workflow_run` trigger on the completed run) and polls until billing is ready.
+
+## [1.1.0] - 2026-06-23
+
+### Added
+- Build-once / test-in-parallel handling for sharded runs (later generalized in
+  1.4.0): compile once, share the output as an artifact, test with `--no-build`.
+
+## [1.0.0] - 2026-06-23
+
+### Added
+- `dotnet-build-test.yml` — parameterized, SHA-pinned .NET build/test reusable
+  workflow with NuGet caching, trx reporting, and coverage upload.
+- `actions-consumption.yml` — stack-agnostic GitHub Actions consumption reporter.
+- `README.md` with inputs reference and caller examples.
+
+[1.4.1]: https://github.com/tibor-horvath/ci-toolkit/compare/v1.4.0...v1.4.1
+[1.4.0]: https://github.com/tibor-horvath/ci-toolkit/compare/v1.3.0...v1.4.0
+[1.3.0]: https://github.com/tibor-horvath/ci-toolkit/compare/v1.2.0...v1.3.0
+[1.2.0]: https://github.com/tibor-horvath/ci-toolkit/compare/v1.1.0...v1.2.0
+[1.1.0]: https://github.com/tibor-horvath/ci-toolkit/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/tibor-horvath/ci-toolkit/releases/tag/v1.0.0
