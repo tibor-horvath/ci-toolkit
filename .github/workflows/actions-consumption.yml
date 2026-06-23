@@ -1,16 +1,19 @@
 name: Actions Consumption Report (reusable)
 
-# Stack-agnostic reporter: posts a run's billable minutes (per OS) to the job
-# summary via the runs/{id}/timing REST endpoint.
+# Stack-agnostic reporter: posts a run's Actions usage (per OS and per job) to
+# the job summary.
 #
-# IMPORTANT: a run's billable time is finalized only AFTER it completes, so a
-# run cannot measure itself. Trigger this on the *completed* run via a tiny
-# workflow_run workflow in the consumer repo:
+# Usage is computed from each job's start/finish timestamps (rounded up per job
+# × OS multiplier), NOT from runs/{id}/timing — that endpoint's `billable` field
+# returns 0 on GitHub's newer metered billing platform. Timestamps work on both.
+#
+# IMPORTANT: trigger this on the *completed* run via a workflow_run workflow in
+# the consumer repo, and pass that run's id:
 #
 #   name: CI Consumption
 #   on:
 #     workflow_run:
-#       workflows: ["CI"]          # <- name of the workflow to measure
+#       workflows: ["CI"]
 #       types: [completed]
 #   permissions:
 #     actions: read
@@ -27,9 +30,8 @@ on:
     inputs:
       run-id:
         description: >-
-          Run ID to report on. Defaults to the current run — but a run cannot
-          see its own finalized billing, so pass a completed run's id
-          (github.event.workflow_run.id) for real numbers.
+          Run ID to report on. Defaults to the current run — but for real
+          numbers pass a completed run's id (github.event.workflow_run.id).
         type: string
         default: ""
       runs-on:
@@ -53,7 +55,7 @@ jobs:
     name: Actions Consumption
     runs-on: ${{ inputs.runs-on }}
     steps:
-      - name: Report billable minutes
+      - name: Report Actions usage
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -63,51 +65,51 @@ jobs:
           BILLING_TOKEN: ${{ secrets.billing_token }}
         run: |
           # `gh` and `jq` are preinstalled on GitHub-hosted runners.
-          # Billing can lag a few seconds after completion — poll briefly.
-          timing='{}'
-          for attempt in 1 2 3 4 5 6; do
-            timing=$(gh api "repos/${REPO}/actions/runs/${RUN_ID}/timing")
-            total=$(echo "$timing" | jq '[(.billable // {}) | .[].total_ms] | add // 0')
-            if [ "${total:-0}" -gt 0 ]; then break; fi
-            echo "Attempt ${attempt}: billable data not ready, waiting 10s…"
-            sleep 10
-          done
-
-          # Job id -> name map, to label the per-job breakdown.
           jobs_json=$(gh api "repos/${REPO}/actions/runs/${RUN_ID}/jobs?per_page=100")
+
+          # Augment each completed job with OS, runtime (s) and billed minutes
+          # (ceil to the minute × OS multiplier).
+          aug=$(echo "$jobs_json" | jq -c '
+            def osof($l): ($l // [] | map(ascii_downcase)) as $d
+              | if   ($d | any(test("windows"))) then "WINDOWS"
+                elif ($d | any(test("mac")))     then "MACOS"
+                else "UBUNTU" end;
+            def mult($os): if $os == "WINDOWS" then 2 elif $os == "MACOS" then 10 else 1 end;
+            [ .jobs[]
+              | select(.started_at != null and .completed_at != null)
+              | (osof(.labels)) as $os
+              | (((.completed_at | fromdateiso8601) - (.started_at | fromdateiso8601))) as $dur
+              | { name, os: $os, dur: $dur, billed: ((($dur / 60) | ceil) * mult($os)) } ]')
+
+          total=$(echo "$aug" | jq '[.[].billed] | add // 0')
 
           {
             echo "## ⏱️ GitHub Actions consumption — run #${RUN_ID}"
             echo ""
-            echo "### By OS"
-            echo "| OS | Jobs | Billable runtime |"
-            echo "|----|-----:|-----------------:|"
-            echo "$timing" | jq -r '
-              if ((.billable // {}) | length) == 0 then
-                "| _no billable data_ | — | — |"
-              else
-                ((.billable) | to_entries[]
-                 | "| \(.key) | \(.value.jobs // 0) | \(((.value.total_ms // 0) / 60000) | floor) min (\(.value.total_ms // 0) ms) |")
+            echo "### By OS (estimated)"
+            echo "| OS | Jobs | Billed |"
+            echo "|----|-----:|-------:|"
+            echo "$aug" | jq -r '
+              if length == 0 then "| _no completed jobs_ | — | — |"
+              else (group_by(.os)[] | "| \(.[0].os) | \(length) | \([.[].billed] | add) min |")
               end'
 
             echo ""
-            echo "### By job"
-            echo "| Job | OS | Runtime | Billed (rounded up) |"
-            echo "|-----|----|--------:|--------------------:|"
-            echo "$timing" | jq -r --argjson jobs "$jobs_json" '
-              (($jobs.jobs // []) | map({(.id|tostring): .name}) | add // {}) as $names
-              | (.billable // {}) | to_entries[]
-              | .key as $os | (.value.job_runs // [])[]
-              | (.duration_ms // 0) as $ms
-              | "| \($names[(.job_id|tostring)] // ("#" + (.job_id|tostring))) | \($os) | \(($ms/1000)|floor)s (\($ms) ms) | \((($ms + 59999)/60000)|floor) min |"'
+            echo "### By job (estimated)"
+            echo "| Job | OS | Runtime | Billed |"
+            echo "|-----|----|--------:|-------:|"
+            echo "$aug" | jq -r '
+              if length == 0 then "| _no completed jobs_ | — | — | — |"
+              else (.[] | "| \(.name) | \(.os) | \((.dur | floor))s | \(.billed) min |")
+              end'
 
             echo ""
-            dur=$(echo "$timing" | jq -r '(.run_duration_ms // 0)')
-            echo "_Wall-clock run duration: $((dur / 1000))s._"
+            echo "**Estimated billable total: ${total} min** — each job rounded up to the"
+            echo "next minute × OS multiplier (Linux 1× · Windows 2× · macOS 10×)."
             echo ""
-            echo "> GitHub rounds **each job** up to the next whole minute and applies OS"
-            echo "> multipliers (Linux 1× · Windows 2× · macOS 10×) at invoice time. The"
-            echo "> \"Billed\" column shows the per-job rounding; multipliers are not applied here."
+            echo "> Derived from job start/finish times. The \`runs/{id}/timing\` billable"
+            echo "> field returns 0 on GitHub's metered billing platform, so this is a"
+            echo "> close estimate rather than the invoiced figure."
           } >> "$GITHUB_STEP_SUMMARY"
 
           # Account-level remaining minutes (only if a billing PAT was provided).
