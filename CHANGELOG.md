@@ -5,6 +5,14 @@ All notable changes to this project are documented here. The format is based on
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Consumers pin the
 moving major tag `@v1`.
 
+## [1.4.2](https://github.com/tibor-horvath/ci-toolkit/compare/v1.4.1...v1.4.2) (2026-06-23)
+
+
+### Fixed
+
+* compute consumption from job timestamps ([#1](https://github.com/tibor-horvath/ci-toolkit/issues/1)) ([84c7774](https://github.com/tibor-horvath/ci-toolkit/commit/84c7774ca5113422a1c6eb5164d0495073370c7f))
+* Fix/consumption from timestamps ([#3](https://github.com/tibor-horvath/ci-toolkit/issues/3)) ([aeb8a81](https://github.com/tibor-horvath/ci-toolkit/commit/aeb8a81135122a8efe8843a5f213769bb4b779a9))
+
 ## [1.4.1] - 2026-06-23
 
 ### Added
