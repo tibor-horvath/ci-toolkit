@@ -27,6 +27,16 @@ All third-party actions are SHA-pinned; NuGet packages are cached.
 The calling job must grant `permissions: { checks: write, contents: read }` (for the
 test-reporter check) and pass `secrets: inherit` if private dependencies need auth.
 
+**Execution modes** (chosen automatically by `test-matrix`):
+
+- **Unsharded** (`test-matrix` empty) → one job builds and tests. No artifact
+  overhead — best for small/single test suites.
+- **Sharded** (`test-matrix` set) → one `build` job compiles **once**, uploads the
+  `bin`/`obj` output as an artifact, and the parallel `test` shards run
+  `dotnet test --no-build`. Avoids recompiling per shard — worth it when the build
+  is slow (tens of seconds+). The shards re-use the same NuGet cache key so
+  `--no-build` can resolve package-supplied MSBuild targets without re-downloading.
+
 ### `.github/workflows/actions-consumption.yml`
 
 Stack-agnostic. Appends this run's billable minutes per OS to the job summary via the
