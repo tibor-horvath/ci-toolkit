@@ -137,11 +137,18 @@ jobs:
       contents: read
 ```
 
-## Versioning
+## Versioning & releases
 
-Releases are cut as `vX.Y.Z` with a moving `vX` tag that consumers pin to. To ship a fix:
+Consumers pin the moving major tag `@v1`. Releases are automated with
+[release-please](https://github.com/googleapis/release-please) (`release.yml`):
 
-```bash
-git tag v1.0.1 && git push origin v1.0.1
-git tag -f v1 v1.0.1 && git push -f origin v1
-```
+1. Push [Conventional Commits](https://www.conventionalcommits.org/) to `main`
+   (`feat:`, `fix:`, `refactor:`, `docs:`, …).
+2. release-please maintains a **release PR** that bumps the version and updates
+   `CHANGELOG.md`.
+3. Merging that PR tags `vX.Y.Z`, cuts a GitHub release, and the workflow
+   repoints **`v1`** at it — so `@v1` consumers get the change automatically.
+
+`feat:` bumps the minor, `fix:` the patch; a `!` or `BREAKING CHANGE:` footer
+bumps the major (and you'd then advertise a `@v2` tag). See `CHANGELOG.md` for
+release history.
