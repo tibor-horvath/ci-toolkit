@@ -1,11 +1,14 @@
 name: .NET Build & Test (reusable)
 
-# Reusable .NET build + test pipeline.
+# Reusable .NET pipeline with a single, uniform shape for every caller:
 #
-# Two execution modes, chosen automatically by `test-matrix`:
-#   * test-matrix EMPTY  -> one job builds and tests (no artifact overhead).
-#   * test-matrix SET    -> one `build` job compiles once, uploads the output,
-#                           and parallel `test` shards run `--no-build`.
+#   build ──▶ test            (unsharded: one test job)
+#   build ──▶ test (unit)     (sharded: parallel test jobs)
+#           └▶ test (integration)
+#
+# The build job compiles ONCE and publishes its output as an artifact; the
+# test job(s) run `dotnet test --no-build`, so the compile is never repeated
+# per shard. Build-only repos (run-tests: false) just skip the test job.
 #
 # Call it from a consumer repo with:
 #   jobs:
@@ -33,14 +36,14 @@ on:
         type: string
         default: "Release"
       run-tests:
-        description: "Run `dotnet test`. Set false for build-only repos."
+        description: "Run the test job. Set false for build-only repos."
         type: boolean
         default: true
       test-matrix:
         description: >-
-          JSON array of shard tokens. When set, builds once then runs a test
-          matrix, filtering each shard by `FullyQualifiedName~.<shard>.`
-          (e.g. '["unit","integration"]').
+          JSON array of shard tokens. When set, runs one test job per shard,
+          filtering each by `FullyQualifiedName~.<shard>.`
+          (e.g. '["unit","integration"]'). Empty -> a single test job.
         type: string
         default: ""
       test-filter:
@@ -65,71 +68,7 @@ permissions:
   contents: read
 
 jobs:
-  # ─── Mode A: unsharded — build + test in a single job ───────────────────
-  build-test:
-    if: ${{ inputs.test-matrix == '' }}
-    name: Build & Test
-    runs-on: ${{ inputs.runs-on }}
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
-        with:
-          dotnet-version: ${{ inputs.dotnet-version }}
-
-      - name: Cache NuGet packages
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
-          restore-keys: ${{ runner.os }}-nuget-
-
-      - name: Restore
-        run: dotnet restore ${{ inputs.build-project }}
-
-      - name: Build
-        run: dotnet build ${{ inputs.build-project }} --no-restore -c ${{ inputs.configuration }}
-
-      - name: Test
-        if: ${{ inputs.run-tests }}
-        shell: bash
-        env:
-          BUILD_PROJECT: ${{ inputs.build-project }}
-          CONFIG: ${{ inputs.configuration }}
-          TEST_FILTER: ${{ inputs.test-filter }}
-          RUNSETTINGS: ${{ inputs.runsettings }}
-          COLLECT: ${{ inputs.collect-coverage }}
-        run: |
-          args=(test)
-          if [ -n "$BUILD_PROJECT" ]; then args+=("$BUILD_PROJECT"); fi
-          args+=(--no-build -c "$CONFIG" --logger "trx;LogFileName=results.trx")
-          if [ -n "$TEST_FILTER" ]; then args+=(--filter "$TEST_FILTER"); fi
-          if [ -n "$RUNSETTINGS" ]; then args+=(--settings "$RUNSETTINGS"); fi
-          if [ "$COLLECT" = "true" ]; then args+=(--collect:"XPlat Code Coverage"); fi
-          echo "dotnet ${args[*]}"
-          dotnet "${args[@]}"
-
-      - name: Test summary
-        if: ${{ always() && inputs.run-tests }}
-        uses: dorny/test-reporter@3eeb9fc888e82e8be2fb356bbeec2750231672bc # v1
-        with:
-          name: Test Results
-          path: "**/TestResults/*.trx"
-          reporter: dotnet-trx
-          fail-on-error: true
-
-      - name: Upload coverage
-        if: ${{ inputs.run-tests && inputs.collect-coverage }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: coverage
-          path: "**/TestResults/**/coverage.cobertura.xml"
-          if-no-files-found: ignore
-
-  # ─── Mode B: sharded — build once, then test shards in parallel ─────────
   build:
-    if: ${{ inputs.test-matrix != '' }}
     name: Build
     runs-on: ${{ inputs.runs-on }}
     steps:
@@ -157,8 +96,8 @@ jobs:
         if: ${{ inputs.run-tests }}
         shell: bash
         # Tar the bin/obj trees into one file so artifact transfer is fast and
-        # paths are restored exactly (avoids upload-artifact's common-ancestor
-        # path rewriting). -prune stops descent into matched dirs.
+        # paths restore exactly (avoids upload-artifact's common-ancestor path
+        # rewriting). -prune stops descent into matched dirs.
         run: |
           find . -type d \( -name bin -o -name obj \) -prune -print > build-dirs.txt
           tar -czf build-output.tar.gz -T build-dirs.txt
@@ -174,14 +113,15 @@ jobs:
           if-no-files-found: error
 
   test:
-    if: ${{ inputs.test-matrix != '' && inputs.run-tests }}
-    name: Build & Test (${{ matrix.shard }})
+    name: Test${{ matrix.shard != '' && format(' ({0})', matrix.shard) || '' }}
+    if: ${{ inputs.run-tests }}
     needs: build
     runs-on: ${{ inputs.runs-on }}
     strategy:
       fail-fast: false
       matrix:
-        shard: ${{ fromJSON(inputs.test-matrix) }}
+        # Empty test-matrix collapses to a single (unsharded) test job.
+        shard: ${{ fromJSON(inputs.test-matrix != '' && inputs.test-matrix || '[""]') }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
@@ -214,12 +154,18 @@ jobs:
           BUILD_PROJECT: ${{ inputs.build-project }}
           CONFIG: ${{ inputs.configuration }}
           SHARD: ${{ matrix.shard }}
+          TEST_FILTER: ${{ inputs.test-filter }}
           RUNSETTINGS: ${{ inputs.runsettings }}
           COLLECT: ${{ inputs.collect-coverage }}
         run: |
           args=(test)
           if [ -n "$BUILD_PROJECT" ]; then args+=("$BUILD_PROJECT"); fi
-          args+=(--no-build -c "$CONFIG" --logger "trx;LogFileName=results.trx" --filter "FullyQualifiedName~.$SHARD.")
+          args+=(--no-build -c "$CONFIG" --logger "trx;LogFileName=results.trx")
+          if [ -n "$SHARD" ]; then
+            args+=(--filter "FullyQualifiedName~.$SHARD.")
+          elif [ -n "$TEST_FILTER" ]; then
+            args+=(--filter "$TEST_FILTER")
+          fi
           if [ -n "$RUNSETTINGS" ]; then args+=(--settings "$RUNSETTINGS"); fi
           if [ "$COLLECT" = "true" ]; then args+=(--collect:"XPlat Code Coverage"); fi
           echo "dotnet ${args[*]}"
@@ -229,7 +175,7 @@ jobs:
         if: ${{ always() }}
         uses: dorny/test-reporter@3eeb9fc888e82e8be2fb356bbeec2750231672bc # v1
         with:
-          name: Test Results (${{ matrix.shard }})
+          name: Test Results${{ matrix.shard != '' && format(' ({0})', matrix.shard) || '' }}
           path: "**/TestResults/*.trx"
           reporter: dotnet-trx
           fail-on-error: true
@@ -238,6 +184,6 @@ jobs:
         if: ${{ inputs.collect-coverage }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: coverage-${{ matrix.shard }}
+          name: coverage${{ matrix.shard != '' && format('-{0}', matrix.shard) || '' }}
           path: "**/TestResults/**/coverage.cobertura.xml"
           if-no-files-found: ignore

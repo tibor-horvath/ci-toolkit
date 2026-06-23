@@ -27,15 +27,20 @@ All third-party actions are SHA-pinned; NuGet packages are cached.
 The calling job must grant `permissions: { checks: write, contents: read }` (for the
 test-reporter check) and pass `secrets: inherit` if private dependencies need auth.
 
-**Execution modes** (chosen automatically by `test-matrix`):
+**Shape.** Every caller gets the same graph: a `build` job compiles **once** and
+publishes its `bin`/`obj` as an artifact, then the `test` job runs
+`dotnet test --no-build`. `test-matrix` fans the test job into parallel shards
+(filtered by `FullyQualifiedName~.<shard>.`); empty means a single test job.
+Build-only repos (`run-tests: false`) skip the test job entirely.
 
-- **Unsharded** (`test-matrix` empty) → one job builds and tests. No artifact
-  overhead — best for small/single test suites.
-- **Sharded** (`test-matrix` set) → one `build` job compiles **once**, uploads the
-  `bin`/`obj` output as an artifact, and the parallel `test` shards run
-  `dotnet test --no-build`. Avoids recompiling per shard — worth it when the build
-  is slow (tens of seconds+). The shards re-use the same NuGet cache key so
-  `--no-build` can resolve package-supplied MSBuild targets without re-downloading.
+```
+build ──▶ test                     # unsharded
+build ──▶ test (unit) ∥ test (integration)   # test-matrix: '["unit","integration"]'
+```
+
+The test shards re-use the build job's NuGet cache key, so `--no-build` can resolve
+package-supplied MSBuild targets without re-downloading. The compile never repeats
+per shard.
 
 ### `.github/workflows/actions-consumption.yml`
 
