@@ -38,13 +38,20 @@ on:
         description: "Runner label."
         type: string
         default: "ubuntu-latest"
+      included-minutes:
+        description: >-
+          Your plan's monthly included Actions minutes (e.g. 2000 Free, 3000 Pro).
+          The usage API reports consumption, not the allowance, so set this to get
+          a "remaining" figure. 0 (default) shows used/cost only.
+        type: number
+        default: 0
     secrets:
       billing_token:
         description: >-
-          Optional PAT to show account-level Actions minutes (used / included /
-          remaining). The built-in GITHUB_TOKEN cannot read billing. Classic PAT
-          needs `user` scope; fine-grained needs account "Plan" read-only. When
-          omitted, the account-usage section is skipped.
+          Optional **classic** PAT (with `Plan` read / `user` scope) to show
+          account-level Actions usage from the enhanced billing usage API. The
+          built-in GITHUB_TOKEN cannot read billing, and fine-grained PATs are
+          NOT supported by the billing endpoints. Omit to skip the section.
         required: false
 
 permissions:
@@ -63,6 +70,7 @@ jobs:
           OWNER: ${{ github.repository_owner }}
           RUN_ID: ${{ inputs.run-id != '' && inputs.run-id || github.run_id }}
           BILLING_TOKEN: ${{ secrets.billing_token }}
+          INCLUDED: ${{ inputs.included-minutes }}
         run: |
           # `gh` and `jq` are preinstalled on GitHub-hosted runners.
           jobs_json=$(gh api "repos/${REPO}/actions/runs/${RUN_ID}/jobs?per_page=100")
@@ -112,22 +120,44 @@ jobs:
             echo "> close estimate rather than the invoiced figure."
           } >> "$GITHUB_STEP_SUMMARY"
 
-          # Account-level remaining minutes (only if a billing PAT was provided).
+          # Account-level Actions usage from the enhanced billing usage API
+          # (current month), only if a billing PAT was provided.
           if [ -n "${BILLING_TOKEN:-}" ]; then
-            {
-              echo ""
-              echo "### Account usage (Actions minutes)"
-            } >> "$GITHUB_STEP_SUMMARY"
-            if billing=$(GH_TOKEN="$BILLING_TOKEN" gh api "users/${OWNER}/settings/billing/actions" 2>/dev/null); then
-              echo "$billing" | jq -r '
-                (.included_minutes // 0) as $inc
-                | (.total_minutes_used // 0) as $used
-                | (.total_paid_minutes_used // 0) as $paid
-                | "| Included | Used | Remaining | Paid overage |",
-                  "|---------:|-----:|----------:|-------------:|",
-                  "| \($inc) min | \($used) min | \((($inc - $used)) | if . < 0 then 0 else . end) min | \($paid) min |"
-              ' >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "### Account usage — Actions (current month)" >> "$GITHUB_STEP_SUMMARY"
+            if usage=$(GH_TOKEN="$BILLING_TOKEN" gh api \
+                  -H "X-GitHub-Api-Version: 2026-03-10" \
+                  "users/${OWNER}/settings/billing/usage" 2>/dev/null); then
+              # Keep only Actions minute line items.
+              acts=$(echo "$usage" | jq -c '
+                [ .usageItems[]
+                  | select((.product | ascii_downcase | test("actions"))
+                           and ((.unitType // "") | ascii_downcase == "minutes")) ]')
+
+              if [ "$(echo "$acts" | jq 'length')" = "0" ]; then
+                echo "_No Actions minute usage reported this month._" >> "$GITHUB_STEP_SUMMARY"
+              else
+                {
+                  echo "| SKU | Minutes | Net cost |"
+                  echo "|-----|--------:|---------:|"
+                  echo "$acts" | jq -r '
+                    group_by(.sku)[]
+                    | "| \(.[0].sku) | \([.[].quantity] | add) min | $\((((([.[].netAmount] | add) * 100) | round) / 100)) |"'
+                  echo ""
+                  # used = minutes counted against the allowance (× OS multiplier).
+                  echo "$acts" | jq -r --argjson inc "${INCLUDED:-0}" '
+                    def m($s): ($s | ascii_downcase) as $x
+                      | if ($x | test("windows")) then 2 elif ($x | test("mac")) then 10 else 1 end;
+                    ([.[] | .quantity * m(.sku)] | add // 0) as $used
+                    | ([.[].netAmount] | add // 0) as $net
+                    | "**Used: \($used) min** (allowance-equivalent) · net cost $\((($net * 100) | round) / 100)"
+                      + (if $inc > 0
+                         then " · **Remaining: \(([$inc - $used, 0] | max)) / \($inc) min**"
+                              + (if ($used > $inc) then " ⚠️ over by \($used - $inc) min" else "" end)
+                         else "" end)'
+                } >> "$GITHUB_STEP_SUMMARY"
+              fi
             else
-              echo "_Account billing unavailable — the token lacks Plan read access, or the account uses the newer metered billing platform (check the billing dashboard)._" >> "$GITHUB_STEP_SUMMARY"
+              echo "_Account usage unavailable — needs a classic PAT with \`Plan\` read access on an account with the enhanced billing platform._" >> "$GITHUB_STEP_SUMMARY"
             fi
           fi
