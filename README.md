@@ -37,7 +37,7 @@ Stack-agnostic. Appends this run's billable minutes per OS to the job summary vi
 
 ## Caller examples
 
-**Sharded tests + consumption (GoalGuess):**
+**Sharded tests + consumption:**
 
 ```yaml
 jobs:
@@ -69,7 +69,7 @@ jobs:
       contents: read
 ```
 
-**Coverage with a runsettings filter (RapidRepo):**
+**Coverage with a runsettings filter:**
 
 ```yaml
 jobs:
