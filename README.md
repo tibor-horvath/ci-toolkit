@@ -44,9 +44,11 @@ per shard.
 
 ### `.github/workflows/actions-consumption.yml`
 
-Stack-agnostic. Posts a run's billable minutes — broken down **by OS and by job** —
-to the job summary via the `runs/{id}/timing` and `runs/{id}/jobs` REST endpoints
-(`gh api`, no extra action).
+Stack-agnostic. Posts a run's Actions usage — broken down **by OS and by job** —
+to the job summary. Usage is computed from each job's start/finish timestamps
+(`runs/{id}/jobs`), rounded up per job × OS multiplier, because the
+`runs/{id}/timing` `billable` field returns 0 on GitHub's metered billing
+platform. It's a close estimate, not the invoiced figure.
 
 > **A run cannot measure itself.** GitHub finalizes billable time only *after* a run
 > completes, so calling this as a job *inside* the run reports all zeros. Trigger it on
