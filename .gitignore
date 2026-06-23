@@ -1,0 +1,6 @@
+# Nothing to build here — just workflow YAML. Ignore common OS/editor noise.
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/

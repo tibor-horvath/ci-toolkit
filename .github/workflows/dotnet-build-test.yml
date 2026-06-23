@@ -1,0 +1,134 @@
+name: .NET Build & Test (reusable)
+
+# Reusable .NET build + test pipeline.
+# Call it from a consumer repo with:
+#   jobs:
+#     ci:
+#       uses: tibor-horvath/ci-toolkit/.github/workflows/dotnet-build-test.yml@v1
+#       with: { dotnet-version: '10.0.x' }
+#       secrets: inherit
+#       permissions: { checks: write, contents: read }
+
+on:
+  workflow_call:
+    inputs:
+      dotnet-version:
+        description: ".NET SDK version to install."
+        type: string
+        default: "10.0.x"
+      build-project:
+        description: >-
+          Solution or project to restore/build/test. Leave empty to let the
+          SDK auto-discover the single .sln/.slnx in the repo root.
+        type: string
+        default: ""
+      configuration:
+        description: "Build configuration."
+        type: string
+        default: "Release"
+      run-tests:
+        description: "Run `dotnet test`. Set false for build-only repos."
+        type: boolean
+        default: true
+      test-matrix:
+        description: >-
+          JSON array of shard tokens. When set, runs a matrix and filters each
+          shard with `FullyQualifiedName~.<shard>.` (e.g. '["unit","integration"]').
+        type: string
+        default: ""
+      test-filter:
+        description: "Single --filter expression (ignored when test-matrix is set)."
+        type: string
+        default: ""
+      runsettings:
+        description: "Path to a .runsettings file passed via `dotnet test --settings`."
+        type: string
+        default: ""
+      collect-coverage:
+        description: 'Add `--collect:"XPlat Code Coverage"` and upload the report.'
+        type: boolean
+        default: true
+      runs-on:
+        description: "Runner label."
+        type: string
+        default: "ubuntu-latest"
+
+permissions:
+  checks: write
+  contents: read
+
+jobs:
+  build-test:
+    name: Build & Test${{ matrix.shard != '' && format(' ({0})', matrix.shard) || '' }}
+    runs-on: ${{ inputs.runs-on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Empty test-matrix collapses to a single (unsharded) job.
+        shard: ${{ fromJSON(inputs.test-matrix != '' && inputs.test-matrix || '[""]') }}
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
+      - name: Cache NuGet packages
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      - name: Restore
+        run: dotnet restore ${{ inputs.build-project }}
+
+      - name: Build
+        run: dotnet build ${{ inputs.build-project }} --no-restore -c ${{ inputs.configuration }}
+
+      - name: Test
+        if: ${{ inputs.run-tests }}
+        shell: bash
+        env:
+          BUILD_PROJECT: ${{ inputs.build-project }}
+          CONFIG: ${{ inputs.configuration }}
+          SHARD: ${{ matrix.shard }}
+          TEST_FILTER: ${{ inputs.test-filter }}
+          RUNSETTINGS: ${{ inputs.runsettings }}
+          COLLECT: ${{ inputs.collect-coverage }}
+        run: |
+          args=(test)
+          if [ -n "$BUILD_PROJECT" ]; then args+=("$BUILD_PROJECT"); fi
+          args+=(--no-build -c "$CONFIG" --logger "trx;LogFileName=results.trx")
+          if [ -n "$SHARD" ]; then
+            args+=(--filter "FullyQualifiedName~.$SHARD.")
+          elif [ -n "$TEST_FILTER" ]; then
+            args+=(--filter "$TEST_FILTER")
+          fi
+          if [ -n "$RUNSETTINGS" ]; then
+            args+=(--settings "$RUNSETTINGS")
+          fi
+          if [ "$COLLECT" = "true" ]; then
+            args+=(--collect:"XPlat Code Coverage")
+          fi
+          echo "dotnet ${args[*]}"
+          dotnet "${args[@]}"
+
+      - name: Test summary
+        if: ${{ always() && inputs.run-tests }}
+        uses: dorny/test-reporter@3eeb9fc888e82e8be2fb356bbeec2750231672bc # v1
+        with:
+          name: Test Results${{ matrix.shard != '' && format(' ({0})', matrix.shard) || '' }}
+          path: "**/TestResults/*.trx"
+          reporter: dotnet-trx
+          fail-on-error: true
+
+      - name: Upload coverage
+        if: ${{ inputs.run-tests && inputs.collect-coverage }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: coverage${{ matrix.shard != '' && format('-{0}', matrix.shard) || '' }}
+          path: "**/TestResults/**/coverage.cobertura.xml"
+          if-no-files-found: ignore

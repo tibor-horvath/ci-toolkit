@@ -1,0 +1,57 @@
+name: Actions Consumption Report (reusable)
+
+# Stack-agnostic reporter: appends this run's billable minutes (per OS) to the
+# job summary. Add it as a dependent job after your CI:
+#   jobs:
+#     usage:
+#       needs: [ci]
+#       uses: tibor-horvath/ci-toolkit/.github/workflows/actions-consumption.yml@v1
+
+on:
+  workflow_call:
+    inputs:
+      runs-on:
+        description: "Runner label."
+        type: string
+        default: "ubuntu-latest"
+
+permissions:
+  actions: read
+
+jobs:
+  report:
+    name: Actions Consumption
+    runs-on: ${{ inputs.runs-on }}
+    steps:
+      - name: Report billable minutes for this run
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          {
+            echo "## ⏱️ GitHub Actions consumption — run #${RUN_ID}"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # `gh` and `jq` are preinstalled on GitHub-hosted runners.
+          timing=$(gh api "repos/${REPO}/actions/runs/${RUN_ID}/timing")
+
+          {
+            echo "| OS | Runtime (billable basis) |"
+            echo "|----|-------------------------:|"
+            echo "$timing" | jq -r '
+              if (.billable == null) or ((.billable | length) == 0) then
+                "| _not finalized yet_ | — |"
+              else
+                (.billable | to_entries[]
+                 | "| \(.key) | \(((.value.total_ms // 0) / 60000) | floor) min (\(.value.total_ms // 0) ms) |")
+              end'
+            echo ""
+            dur=$(echo "$timing" | jq -r '(.run_duration_ms // 0)')
+            echo "_Wall-clock run duration: $((dur / 1000))s._"
+            echo ""
+            echo "> Billing multipliers (Linux 1× · Windows 2× · macOS 10×) are applied"
+            echo "> by GitHub at invoice time and are **not** reflected in the ms above."
+          } >> "$GITHUB_STEP_SUMMARY"
