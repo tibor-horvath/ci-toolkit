@@ -98,9 +98,10 @@ registry.
 | `build-args` | `''` | Newline-separated `KEY=VALUE` build args |
 | `runs-on` | `ubuntu-latest` | Runner label |
 
-For **GHCR**, login defaults to `github.actor` + `GITHUB_TOKEN` — just grant the
-calling job `packages: write`. For **other registries**, pass `registry-username`
-and `registry-password` secrets:
+This workflow declares **no permissions of its own** — it inherits the caller job's
+token. So each caller grants what its registry needs: **GHCR** → `packages: write`
+(login defaults to `github.actor` + `GITHUB_TOKEN`); **other registries** → just
+`contents: read` plus `registry-username` / `registry-password` secrets.
 
 ```yaml
 # GHCR, push only on main
@@ -120,6 +121,8 @@ jobs:
 # Docker Hub
 jobs:
   docker:
+    permissions:
+      contents: read
     uses: tibor-horvath/ci-toolkit/.github/workflows/docker-publish.yml@v1
     with:
       registry: docker.io

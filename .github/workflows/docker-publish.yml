@@ -60,9 +60,9 @@ on:
         description: "Registry password/token. Defaults to GITHUB_TOKEN (for GHCR)."
         required: false
 
-permissions:
-  contents: read
-  packages: write
+# No top-level permissions: the reusable inherits the caller job's token, so
+# each caller grants only what its registry needs (GHCR → packages: write;
+# Docker Hub / other → just contents: read for checkout).
 
 jobs:
   publish:
