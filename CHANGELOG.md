@@ -5,6 +5,18 @@ All notable changes to this project are documented here. The format is based on
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Consumers pin the
 moving major tag `@v1`.
 
+## [1.5.0](https://github.com/tibor-horvath/ci-toolkit/compare/v1.4.2...v1.5.0) (2026-06-24)
+
+
+### Added
+
+* add reusable Docker publish workflow with configurable inputs ([4ea495c](https://github.com/tibor-horvath/ci-toolkit/commit/4ea495c17e5333e446075968a08aa4f22374b82b))
+
+
+### Fixed
+
+* update PAT scope description in billing documentation ([f62a372](https://github.com/tibor-horvath/ci-toolkit/commit/f62a3726432ff7508580457b6ac2b51f903bc847))
+
 ## [1.4.2](https://github.com/tibor-horvath/ci-toolkit/compare/v1.4.1...v1.4.2) (2026-06-23)
 
 
