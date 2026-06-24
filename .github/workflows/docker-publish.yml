@@ -1,0 +1,124 @@
+name: Docker Publish (reusable)
+
+# Reusable Docker build + push (Buildx, GHA layer cache, SHA-pinned actions).
+# Works with any registry:
+#   * GHCR  → defaults to github.actor + GITHUB_TOKEN (grant packages: write).
+#   * other → pass registry-username / registry-password secrets.
+#
+# Example (GHCR, push only on main):
+#   jobs:
+#     docker:
+#       needs: ci
+#       permissions: { contents: read, packages: write }
+#       uses: tibor-horvath/ci-toolkit/.github/workflows/docker-publish.yml@v1
+#       with:
+#         tags: sha-${{ github.sha }}
+#         push: ${{ github.ref == 'refs/heads/main' }}
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        description: >-
+          Full image name without tag (e.g. ghcr.io/owner/app or user/app).
+          Empty → <registry>/<repository lowercased>.
+        type: string
+        default: ""
+      registry:
+        description: "Registry host (ghcr.io, docker.io, …)."
+        type: string
+        default: "ghcr.io"
+      tags:
+        description: "Comma-separated tag list (e.g. 'sha-abc123,latest'). Empty → sha-<github.sha>."
+        type: string
+        default: ""
+      context:
+        description: "Build context."
+        type: string
+        default: "."
+      dockerfile:
+        description: "Path to the Dockerfile."
+        type: string
+        default: "Dockerfile"
+      push:
+        description: "Push the image (false = build only, e.g. on PRs)."
+        type: boolean
+        default: true
+      build-args:
+        description: "Newline-separated build args (KEY=VALUE)."
+        type: string
+        default: ""
+      runs-on:
+        description: "Runner label."
+        type: string
+        default: "ubuntu-latest"
+    secrets:
+      registry-username:
+        description: "Registry username. Defaults to github.actor (for GHCR)."
+        required: false
+      registry-password:
+        description: "Registry password/token. Defaults to GITHUB_TOKEN (for GHCR)."
+        required: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    name: Docker Publish
+    runs-on: ${{ inputs.runs-on }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Compute image and tag refs
+        id: meta
+        shell: bash
+        env:
+          REGISTRY: ${{ inputs.registry }}
+          IMAGE: ${{ inputs.image }}
+          TAGS: ${{ inputs.tags }}
+        run: |
+          image="$IMAGE"
+          if [ -z "$image" ]; then
+            repo_lc=$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')
+            image="${REGISTRY}/${repo_lc}"
+          fi
+          tags="$TAGS"
+          [ -z "$tags" ] && tags="sha-${GITHUB_SHA}"
+
+          refs=""
+          IFS=','
+          for t in $tags; do
+            t=$(echo "$t" | xargs)            # trim whitespace
+            [ -n "$t" ] && refs="${refs}${image}:${t}"$'\n'
+          done
+
+          {
+            echo "refs<<EOF"
+            printf '%s' "$refs"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "Image refs:"; printf '%s' "$refs"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to ${{ inputs.registry }}
+        if: ${{ inputs.push }}
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ inputs.registry }}
+          username: ${{ secrets.registry-username || github.actor }}
+          password: ${{ secrets.registry-password || github.token }}
+
+      - name: Build and push
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: ${{ inputs.context }}
+          file: ${{ inputs.dockerfile }}
+          push: ${{ inputs.push }}
+          tags: ${{ steps.meta.outputs.refs }}
+          build-args: ${{ inputs.build-args }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
