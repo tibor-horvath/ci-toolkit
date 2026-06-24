@@ -5,6 +5,13 @@ All notable changes to this project are documented here. The format is based on
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Consumers pin the
 moving major tag `@v1`.
 
+## [1.5.1](https://github.com/tibor-horvath/ci-toolkit/compare/v1.5.0...v1.5.1) (2026-06-24)
+
+
+### Fixed
+
+* update permissions handling in Docker publish workflow documentation ([b3310cb](https://github.com/tibor-horvath/ci-toolkit/commit/b3310cb63e97c75fe2c850a355376161eb7f646f))
+
 ## [1.5.0](https://github.com/tibor-horvath/ci-toolkit/compare/v1.4.2...v1.5.0) (2026-06-24)
 
 
