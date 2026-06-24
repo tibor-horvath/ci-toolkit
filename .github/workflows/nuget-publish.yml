@@ -1,0 +1,114 @@
+name: NuGet Publish (reusable)
+
+# Reusable NuGet pack + push. Pack the solution/project once, then push every
+# resulting package (with --skip-duplicate so re-runs are idempotent). Mark
+# non-package projects with <IsPackable>false</IsPackable> so only real
+# packages are produced.
+#
+# Example (publish on release):
+#   on:
+#     release:
+#       types: [published]
+#   permissions:
+#     contents: read
+#   jobs:
+#     publish:
+#       uses: tibor-horvath/ci-toolkit/.github/workflows/nuget-publish.yml@v1
+#       secrets:
+#         nuget-api-key: ${{ secrets.NUGET_API_KEY }}
+
+on:
+  workflow_call:
+    inputs:
+      dotnet-version:
+        description: ".NET SDK version to install."
+        type: string
+        default: "10.0.x"
+      project:
+        description: >-
+          Solution or project to pack. Empty → SDK auto-discovers the root
+          .sln/.slnx.
+        type: string
+        default: ""
+      configuration:
+        description: "Build configuration."
+        type: string
+        default: "Release"
+      version:
+        description: >-
+          Package version. Empty → the release tag (github.ref_name) with any
+          leading 'v' stripped (e.g. v3.1.0 → 3.1.0).
+        type: string
+        default: ""
+      nuget-source:
+        description: "NuGet feed to push to."
+        type: string
+        default: "https://api.nuget.org/v3/index.json"
+      include-symbols:
+        description: "Also produce and push .snupkg symbol packages."
+        type: boolean
+        default: false
+      runs-on:
+        description: "Runner label."
+        type: string
+        default: "ubuntu-latest"
+    secrets:
+      nuget-api-key:
+        description: "API key for the target NuGet feed."
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: NuGet Publish
+    runs-on: ${{ inputs.runs-on }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
+      - name: Cache NuGet packages
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      - name: Pack
+        shell: bash
+        env:
+          PROJECT: ${{ inputs.project }}
+          CONFIG: ${{ inputs.configuration }}
+          INPUT_VERSION: ${{ inputs.version }}
+          SYMBOLS: ${{ inputs.include-symbols }}
+        run: |
+          version="$INPUT_VERSION"
+          [ -z "$version" ] && version="${GITHUB_REF_NAME#v}"
+          echo "Packing version: $version"
+
+          args=(pack)
+          [ -n "$PROJECT" ] && args+=("$PROJECT")
+          args+=(-c "$CONFIG" -o artifacts
+                 -p:PackageVersion="$version"
+                 -p:ContinuousIntegrationBuild=true)
+          if [ "$SYMBOLS" = "true" ]; then
+            args+=(-p:IncludeSymbols=true -p:SymbolPackageFormat=snupkg)
+          fi
+          dotnet "${args[@]}"
+          ls -1 artifacts
+
+      - name: Push
+        shell: bash
+        env:
+          SOURCE: ${{ inputs.nuget-source }}
+          NUGET_API_KEY: ${{ secrets.nuget-api-key }}
+        run: |
+          dotnet nuget push "artifacts/*.nupkg" \
+            --source "$SOURCE" \
+            --api-key "$NUGET_API_KEY" \
+            --skip-duplicate
