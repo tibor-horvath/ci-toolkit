@@ -61,9 +61,9 @@ platform. It's a close estimate, not the invoiced figure.
 Actions usage section (per-SKU minutes + net cost) from GitHub's enhanced billing
 usage API. Notes:
 
-- Must be a **classic** PAT with `Plan` read (`user` scope). The billing endpoints
-  do **not** accept fine-grained PATs, and the built-in `GITHUB_TOKEN` can't read
-  billing. Omit the secret to skip the section.
+- Must be a **classic** PAT with the `user` scope. The billing endpoints do **not**
+  accept fine-grained PATs (there is no "Plan" scope on classic tokens), and the
+  built-in `GITHUB_TOKEN` can't read billing. Omit the secret to skip the section.
 - The usage API reports consumption, not your allowance. Set `included-minutes` to
   your plan's monthly minutes (e.g. `2000` Free, `3000` Pro) to also show
   **remaining**. Minutes are counted allowance-equivalent (Windows 2×, macOS 10×).

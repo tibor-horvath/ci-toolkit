@@ -48,8 +48,8 @@ on:
     secrets:
       billing_token:
         description: >-
-          Optional **classic** PAT (with `Plan` read / `user` scope) to show
-          account-level Actions usage from the enhanced billing usage API. The
+          Optional **classic** PAT (with the `user` scope) to show account-level
+          Actions usage from the enhanced billing usage API. The
           built-in GITHUB_TOKEN cannot read billing, and fine-grained PATs are
           NOT supported by the billing endpoints. Omit to skip the section.
         required: false
@@ -158,6 +158,6 @@ jobs:
                 } >> "$GITHUB_STEP_SUMMARY"
               fi
             else
-              echo "_Account usage unavailable — needs a classic PAT with \`Plan\` read access on an account with the enhanced billing platform._" >> "$GITHUB_STEP_SUMMARY"
+              echo "_Account usage unavailable — needs a classic PAT with the \`user\` scope on an account with the enhanced billing platform._" >> "$GITHUB_STEP_SUMMARY"
             fi
           fi
