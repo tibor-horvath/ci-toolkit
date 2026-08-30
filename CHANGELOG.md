@@ -5,6 +5,13 @@ All notable changes to this project are documented here. The format is based on
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Consumers pin the
 moving major tag `@v1`.
 
+## [1.7.0](https://github.com/tibor-horvath/ci-toolkit/compare/v1.6.0...v1.7.0) (2026-08-30)
+
+
+### Added
+
+* rename CI job to dotnet and update documentation for clarity ([#7](https://github.com/tibor-horvath/ci-toolkit/issues/7)) ([c08814c](https://github.com/tibor-horvath/ci-toolkit/commit/c08814cf691f73f095d997d21b9a60400a5648d4))
+
 ## [1.6.0](https://github.com/tibor-horvath/ci-toolkit/compare/v1.5.1...v1.6.0) (2026-06-24)
 
 
