@@ -79,6 +79,10 @@ jobs:
           IMAGE: ${{ inputs.image }}
           TAGS: ${{ inputs.tags }}
         run: |
+          # REGISTRY/IMAGE/TAGS are supplied by this step's `env:` block above.
+          # actionlint hands shellcheck the script body only, so it cannot see
+          # those assignments and reports SC2153 against the lowercase locals.
+          # shellcheck disable=SC2153
           image="$IMAGE"
           if [ -z "$image" ]; then
             repo_lc=$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')
