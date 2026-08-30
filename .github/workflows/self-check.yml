@@ -29,6 +29,15 @@ env:
   # Bump manually — dependabot does not track versions held in env vars.
   ACTIONLINT_VERSION: "1.7.7"
 
+  # SC2153 reads `$FOO` as a probable misspelling of a nearby `foo` local.
+  # In workflow scripts the uppercase names come from the step's `env:` block,
+  # which shellcheck never sees — actionlint hands it the script body alone —
+  # so the check has no signal here and fires only false positives. A leading
+  # `# shellcheck disable` comment does not cover this: without a shebang it
+  # binds to the next command, not the script, so it would need repeating at
+  # every assignment. shellcheck reads this variable from its own environment.
+  SHELLCHECK_OPTS: "-e SC2153"
+
 jobs:
   actionlint:
     name: actionlint
