@@ -1,0 +1,103 @@
+name: Self Check
+
+# Lints this repository's own workflows.
+#
+# The toolkit ships several hundred lines of bash embedded in YAML, and `@v1` is
+# a moving tag — so a typo here reaches every consumer on the next merge, and
+# only surfaces in *their* run. This job is the guard for that.
+#
+# actionlint covers both layers in one pass: it validates workflow syntax,
+# expressions, `needs`/`if` references and matrix shapes, AND pipes every `run:`
+# block through shellcheck (preinstalled on GitHub-hosted runners). The second
+# job enforces the README's "all third-party actions are SHA-pinned" promise,
+# which actionlint does not check.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: self-check-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Bump manually — dependabot does not track versions held in env vars.
+  ACTIONLINT_VERSION: "1.7.7"
+
+jobs:
+  actionlint:
+    name: actionlint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install actionlint
+        shell: bash
+        # Downloaded from the pinned release tag and verified against the
+        # checksums file published with it. That protects against a truncated or
+        # corrupted download; it is not a defence against a compromised release,
+        # since both files come from the same origin.
+        run: |
+          set -euo pipefail
+          base="https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}"
+          tarball="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          sums="actionlint_${ACTIONLINT_VERSION}_checksums.txt"
+          curl -fsSL --retry 3 -O "${base}/${tarball}"
+          curl -fsSL --retry 3 -O "${base}/${sums}"
+          sha256sum --ignore-missing -c "${sums}"
+          tar -xzf "${tarball}" actionlint
+          ./actionlint --version
+
+      - name: Show shellcheck version
+        # actionlint shells out to shellcheck for `run:` blocks and silently
+        # skips that analysis if the binary is missing, so assert it is here.
+        run: shellcheck --version
+
+      - name: Lint workflows
+        run: ./actionlint -color
+
+  pinned-actions:
+    name: Actions are SHA-pinned
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Check every `uses:` resolves to a full commit SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Only real `uses:` keys — a leading `#` (the caller examples in the
+          # header comments) does not match.
+          grep -rnE '^[[:space:]]*-?[[:space:]]*uses:' .github/workflows > uses.txt || true
+
+          fail=0
+          while IFS= read -r hit; do
+            [ -n "$hit" ] || continue
+            file="${hit%%:*}"
+            rest="${hit#*:}"
+            line="${rest%%:*}"
+            ref=$(printf '%s' "$hit" \
+              | sed -E 's/.*uses:[[:space:]]*//; s/[[:space:]]+#.*$//' \
+              | tr -d '[:space:]')
+
+            case "$ref" in
+              # Local composite actions and same-repo reusable workflows are
+              # versioned by this repo's own tags, not by SHA.
+              ./*|docker://*|tibor-horvath/ci-toolkit/*) continue ;;
+            esac
+
+            if printf '%s' "$ref" | grep -qE '@[0-9a-f]{40}$'; then
+              echo "  ok  ${ref}"
+            else
+              echo "::error file=${file},line=${line}::action is not SHA-pinned: ${ref}"
+              fail=1
+            fi
+          done < uses.txt
+
+          exit "$fail"
