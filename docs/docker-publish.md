@@ -25,7 +25,7 @@ token. So each caller grants what its registry needs: **GHCR** → `packages: wr
 # GHCR, push only on main
 jobs:
   docker:
-    needs: ci
+    needs: dotnet
     permissions:
       contents: read
       packages: write

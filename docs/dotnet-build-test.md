@@ -35,13 +35,31 @@ The test shards re-use the build job's NuGet cache key, so `--no-build` can reso
 package-supplied MSBuild targets without re-downloading. The compile never repeats
 per shard.
 
+## Check names
+
+GitHub labels a reusable-workflow job `<calling job> / <called job>`, so the
+calling job's name is the prefix on every check this workflow produces. Naming
+it after the stack keeps that prefix meaningful and non-redundant:
+
+| Calling job | Check names |
+|---|---|
+| `dotnet:` with `name: .NET` | `.NET / Build`, `.NET / Test (unit)`, `.NET / Test (integration)` |
+| `ci:` (no name) | `ci / Build`, `ci / Test (unit)` … |
+
+The matrix *group* header in the run graph uses the job **id** (`test`), not its
+name — that is GitHub's rendering, not something this workflow sets.
+
+These strings are the status-check names branch protection matches on, so
+renaming the calling job means updating the required checks in that repo.
+
 ## Examples
 
 **Build + sharded tests:**
 
 ```yaml
 jobs:
-  ci:
+  dotnet:
+    name: .NET
     uses: tibor-horvath/ci-toolkit/.github/workflows/dotnet-build-test.yml@v1
     with:
       dotnet-version: "10.0.x"
@@ -56,7 +74,8 @@ jobs:
 
 ```yaml
 jobs:
-  ci:
+  dotnet:
+    name: .NET
     uses: tibor-horvath/ci-toolkit/.github/workflows/dotnet-build-test.yml@v1
     with:
       dotnet-version: "9.0.x"
@@ -70,7 +89,8 @@ jobs:
 
 ```yaml
 jobs:
-  ci:
+  dotnet:
+    name: .NET
     uses: tibor-horvath/ci-toolkit/.github/workflows/dotnet-build-test.yml@v1
     with:
       dotnet-version: "10.0.x"

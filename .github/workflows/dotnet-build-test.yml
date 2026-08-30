@@ -12,7 +12,8 @@ name: .NET Build & Test (reusable)
 #
 # Call it from a consumer repo with:
 #   jobs:
-#     ci:
+#     dotnet:
+#       name: .NET
 #       uses: tibor-horvath/ci-toolkit/.github/workflows/dotnet-build-test.yml@v1
 #       with: { dotnet-version: '10.0.x', test-matrix: '["unit","integration"]' }
 #       secrets: inherit
