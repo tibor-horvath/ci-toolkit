@@ -24,7 +24,8 @@ on:
   push: { branches: [main] }
   pull_request: { branches: [main] }
 jobs:
-  ci:
+  dotnet:
+    name: .NET
     uses: tibor-horvath/ci-toolkit/.github/workflows/dotnet-build-test.yml@v1
     with:
       dotnet-version: "10.0.x"
