@@ -1,0 +1,44 @@
+version: 2
+
+# Keeps the SHA-pinned actions from rotting. `self-check.yml` proves every
+# `uses:` is pinned to a commit; nothing until now proved the commit was
+# current, and a pin is only as good as its last review.
+#
+# Grouping is deliberately split by risk rather than by a single on/off switch:
+#
+#   minor + patch -> one grouped PR per week. Low-risk, high-volume, and not
+#                    worth a review each.
+#   major         -> falls outside the group, so one PR per action. These can
+#                    change action inputs or runtime behavior, and `@v1`
+#                    consumers inherit that on the next release — so each one
+#                    gets read on its own.
+
+updates:
+  - package-ecosystem: "github-actions"
+    # "/" covers .github/workflows/** — not just the repo root.
+    directory: "/"
+
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Budapest"
+
+    open-pull-requests-limit: 5
+
+    labels:
+      - "dependencies"
+
+    commit-message:
+      # Dependabot appends the scope, giving `fix(deps): bump ...`. That is a
+      # patch bump in release-please, which moves `v1` — see the note below.
+      prefix: "fix"
+
+    groups:
+      actions-minor-patch:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
