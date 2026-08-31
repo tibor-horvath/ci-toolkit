@@ -5,6 +5,17 @@ All notable changes to this project are documented here. The format is based on
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Consumers pin the
 moving major tag `@v1`.
 
+## [1.7.1](https://github.com/tibor-horvath/ci-toolkit/compare/v1.7.0...v1.7.1) (2026-08-31)
+
+
+### Fixed
+
+* bump actions/cache from 4.3.0 to 6.1.0 ([#13](https://github.com/tibor-horvath/ci-toolkit/issues/13)) ([5e241d3](https://github.com/tibor-horvath/ci-toolkit/commit/5e241d30dac6150fa6f33ce3a33f9a627d8514db))
+* bump actions/checkout from 4.3.1 to 7.0.1 ([#15](https://github.com/tibor-horvath/ci-toolkit/issues/15)) ([43e64d3](https://github.com/tibor-horvath/ci-toolkit/commit/43e64d34ed10436434f27c0f4913ff6ab602ad0d))
+* bump actions/setup-dotnet from 4.3.1 to 6.0.0 ([#14](https://github.com/tibor-horvath/ci-toolkit/issues/14)) ([8afb1eb](https://github.com/tibor-horvath/ci-toolkit/commit/8afb1eb8f419d140736a074e38a52d643d350a81))
+* bump dorny/test-reporter from 1 to 3 ([#11](https://github.com/tibor-horvath/ci-toolkit/issues/11)) ([e2aea37](https://github.com/tibor-horvath/ci-toolkit/commit/e2aea37a6fe37318a9366de1ec7cb6ea6b6dfdeb))
+* bump googleapis/release-please-action from 4.4.1 to 5.0.0 ([#12](https://github.com/tibor-horvath/ci-toolkit/issues/12)) ([204592e](https://github.com/tibor-horvath/ci-toolkit/commit/204592e3253bd6adfc853213229496153a61995d))
+
 ## [1.7.0](https://github.com/tibor-horvath/ci-toolkit/compare/v1.6.0...v1.7.0) (2026-08-30)
 
 
