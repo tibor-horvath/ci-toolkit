@@ -5,6 +5,13 @@ All notable changes to this project are documented here. The format is based on
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Consumers pin the
 moving major tag `@v1`.
 
+## [1.8.0](https://github.com/tibor-horvath/ci-toolkit/compare/v1.7.1...v1.8.0) (2026-08-31)
+
+
+### Added
+
+* add outputs for reusable workflows in actions consumption, docker publish, dotnet build & test, and nuget publish ([#17](https://github.com/tibor-horvath/ci-toolkit/issues/17)) ([afa79b4](https://github.com/tibor-horvath/ci-toolkit/commit/afa79b4503a9cf040ef5fee268c939cb2b946b31))
+
 ## [1.7.1](https://github.com/tibor-horvath/ci-toolkit/compare/v1.7.0...v1.7.1) (2026-08-31)
 
 
