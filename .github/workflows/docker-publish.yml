@@ -52,6 +52,19 @@ on:
         description: "Runner label."
         type: string
         default: "ubuntu-latest"
+    outputs:
+      image:
+        description: "Image name that was built, without a tag (e.g. ghcr.io/owner/app)."
+        value: ${{ jobs.publish.outputs.image }}
+      tags:
+        description: "Comma-separated list of the fully-qualified refs that were built."
+        value: ${{ jobs.publish.outputs.tags }}
+      digest:
+        description: >-
+          Image digest (sha256:…) — the immutable reference, and the one to
+          deploy from, since tags can be moved. Empty when push is false:
+          nothing reaches a registry, so there is no digest to report.
+        value: ${{ jobs.publish.outputs.digest }}
     secrets:
       registry-username:
         description: "Registry username. Defaults to github.actor (for GHCR)."
@@ -68,6 +81,10 @@ jobs:
   publish:
     name: Docker Publish
     runs-on: ${{ inputs.runs-on }}
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+      tags: ${{ steps.meta.outputs.tags }}
+      digest: ${{ steps.build.outputs.digest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
 
@@ -87,14 +104,25 @@ jobs:
           tags="$TAGS"
           [ -z "$tags" ] && tags="sha-${GITHUB_SHA}"
 
+          # Two shapes of the same list: `refs` stays newline-separated because
+          # that is what build-push-action's `tags:` input expects, while `csv`
+          # is the single-line form handed to callers as a workflow output.
           refs=""
+          csv=""
           IFS=','
           for t in $tags; do
             t=$(echo "$t" | xargs)            # trim whitespace
-            [ -n "$t" ] && refs="${refs}${image}:${t}"$'\n'
+            if [ -n "$t" ]; then
+              refs="${refs}${image}:${t}"$'\n'
+              csv="${csv}${image}:${t},"
+            fi
           done
+          unset IFS
+          csv="${csv%,}"
 
           {
+            echo "image=${image}"
+            echo "tags=${csv}"
             echo "refs<<EOF"
             printf '%s' "$refs"
             echo "EOF"
@@ -113,6 +141,7 @@ jobs:
           password: ${{ secrets.registry-password || github.token }}
 
       - name: Build and push
+        id: build
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: ${{ inputs.context }}

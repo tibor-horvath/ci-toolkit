@@ -19,6 +19,37 @@ token. So each caller grants what its registry needs: **GHCR** → `packages: wr
 (login defaults to `github.actor` + `GITHUB_TOKEN`); **other registries** → just
 `contents: read` plus `registry-username` / `registry-password` secrets.
 
+## Outputs
+
+| Output | Purpose |
+|---|---|
+| `image` | Image name that was built, without a tag |
+| `tags` | Comma-separated list of the fully-qualified refs that were built |
+| `digest` | Image digest (`sha256:…`). Empty when `push: false` — nothing reaches a registry, so there is nothing to address |
+
+Deploy from the digest, not a tag: a tag can be repointed at a different image
+later, a digest cannot.
+
+```yaml
+jobs:
+  docker:
+    permissions:
+      contents: read
+      packages: write
+    uses: tibor-horvath/ci-toolkit/.github/workflows/docker-publish.yml@v1
+    with:
+      tags: sha-${{ github.sha }},latest
+
+  deploy:
+    needs: docker
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          helm upgrade app ./chart \
+            --set image.repository=${{ needs.docker.outputs.image }} \
+            --set image.digest=${{ needs.docker.outputs.digest }}
+```
+
 ## Examples
 
 ```yaml

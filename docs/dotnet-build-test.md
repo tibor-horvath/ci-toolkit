@@ -13,6 +13,7 @@ artifact). All third-party actions are SHA-pinned; NuGet packages are cached.
 | `test-filter` | `''` | Single `--filter` (ignored when `test-matrix` is set) |
 | `runsettings` | `''` | Path passed to `dotnet test --settings` (e.g. coverage include filters) |
 | `collect-coverage` | `true` | Collect `XPlat Code Coverage` and upload as an artifact |
+| `test-summary` | `false` | Sum the trx counters into workflow outputs. Adds one job — see [Outputs](#outputs) |
 | `runs-on` | `ubuntu-latest` | Runner label |
 
 The calling job must grant `permissions: { checks: write, contents: read }` (for the
@@ -34,6 +35,48 @@ build ──▶ test (unit) ∥ test (integration)   # test-matrix: '["unit","in
 The test shards re-use the build job's NuGet cache key, so `--no-build` can resolve
 package-supplied MSBuild targets without re-downloading. The compile never repeats
 per shard.
+
+## Outputs
+
+Off by default. Set `test-summary: true` to populate them.
+
+| Output | Purpose |
+|---|---|
+| `tests-total` | Total tests across every shard |
+| `tests-passed` | Passed tests across every shard |
+| `tests-failed` | Failed tests across every shard |
+| `tests-skipped` | Tests reported as `notExecuted` across every shard |
+| `tests-outcome` | `passed`, `failed`, or `no-tests` when no trx was produced |
+
+**Why this costs a job.** Matrix job outputs are last-writer-wins: whichever
+shard finishes last overwrites the rest, nondeterministically. Shards therefore
+cannot report totals themselves. Each uploads its trx instead, and a `Test
+Totals` job sums them once the matrix is done. That is a billed minute per run,
+which is why it is opt-in rather than always on — and why leaving it off means
+one extra *skipped* job in the run graph.
+
+The totals job runs under `always()`, so a failing shard still contributes its
+counts rather than silently reporting zero failures.
+
+```yaml
+jobs:
+  dotnet:
+    name: .NET
+    uses: tibor-horvath/ci-toolkit/.github/workflows/dotnet-build-test.yml@v1
+    with:
+      test-matrix: '["unit","integration"]'
+      test-summary: true
+    permissions:
+      checks: write
+      contents: read
+
+  notify:
+    needs: dotnet
+    if: ${{ needs.dotnet.outputs.tests-failed != '0' }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ needs.dotnet.outputs.tests-failed }} of ${{ needs.dotnet.outputs.tests-total }} failed"
+```
 
 ## Check names
 

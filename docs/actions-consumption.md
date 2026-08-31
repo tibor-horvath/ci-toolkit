@@ -27,6 +27,34 @@ usage API:
   show **remaining**. Minutes are counted allowance-equivalent (Windows 2×, macOS 10×).
 - Requires an account on GitHub's enhanced/metered billing platform.
 
+## Outputs
+
+| Output | Purpose |
+|---|---|
+| `total-minutes` | Estimated billable minutes for the reported run |
+
+Lets a caller act on the number instead of only reading the summary by eye — for
+example, failing a nightly budget check:
+
+```yaml
+jobs:
+  report:
+    uses: tibor-horvath/ci-toolkit/.github/workflows/actions-consumption.yml@v1
+    with:
+      run-id: ${{ github.event.workflow_run.id }}
+    permissions:
+      actions: read
+
+  budget:
+    needs: report
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if the run cost more than 60 minutes
+        run: |
+          used=${{ needs.report.outputs.total-minutes }}
+          [ "$used" -le 60 ] || { echo "::error::run used ${used} min"; exit 1; }
+```
+
 ## Example
 
 Add as a separate workflow that fires after the measured workflow completes:

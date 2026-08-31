@@ -59,10 +59,36 @@ on:
         description: 'Add `--collect:"XPlat Code Coverage"` and upload the report.'
         type: boolean
         default: true
+      test-summary:
+        description: >-
+          Aggregate the trx results into workflow outputs (test counts). Off by
+          default because it costs an extra job: matrix outputs are
+          last-writer-wins, so shards cannot report totals themselves, and the
+          numbers have to be summed by a job that runs exactly once.
+        type: boolean
+        default: false
       runs-on:
         description: "Runner label."
         type: string
         default: "ubuntu-latest"
+    outputs:
+      # All empty unless `test-summary` is enabled — a skipped job contributes
+      # empty strings rather than failing the caller's expression.
+      tests-total:
+        description: "Total tests across every shard."
+        value: ${{ jobs.totals.outputs.total }}
+      tests-passed:
+        description: "Passed tests across every shard."
+        value: ${{ jobs.totals.outputs.passed }}
+      tests-failed:
+        description: "Failed tests across every shard."
+        value: ${{ jobs.totals.outputs.failed }}
+      tests-skipped:
+        description: "Tests reported as not executed across every shard."
+        value: ${{ jobs.totals.outputs.skipped }}
+      tests-outcome:
+        description: "`passed`, `failed`, or `no-tests` when no trx was produced."
+        value: ${{ jobs.totals.outputs.outcome }}
 
 permissions:
   checks: write
@@ -188,3 +214,93 @@ jobs:
           name: coverage${{ matrix.shard != '' && format('-{0}', matrix.shard) || '' }}
           path: "**/TestResults/**/coverage.cobertura.xml"
           if-no-files-found: ignore
+
+      # The trx is what the totals job sums. `always()` so a failing shard still
+      # contributes its counts — a run that reports 0 failures because the job
+      # died is worse than no number at all.
+      - name: Upload test results
+        if: ${{ always() && inputs.test-summary }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: test-results${{ matrix.shard != '' && format('-{0}', matrix.shard) || '' }}
+          path: "**/TestResults/*.trx"
+          retention-days: 1
+          if-no-files-found: ignore
+
+  totals:
+    name: Test Totals
+    # `always()` so failed shards are still counted; the job itself only reports.
+    if: ${{ always() && inputs.run-tests && inputs.test-summary }}
+    needs: test
+    runs-on: ${{ inputs.runs-on }}
+    outputs:
+      total: ${{ steps.agg.outputs.total }}
+      passed: ${{ steps.agg.outputs.passed }}
+      failed: ${{ steps.agg.outputs.failed }}
+      skipped: ${{ steps.agg.outputs.skipped }}
+      outcome: ${{ steps.agg.outputs.outcome }}
+    steps:
+      - name: Download test results
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: test-results*
+          merge-multiple: true
+          path: trx
+
+      - name: Aggregate trx counters
+        id: agg
+        shell: bash
+        run: |
+          # Every trx carries one <Counters .../> element holding the whole
+          # file's tallies, so summing that across shards is the entire job.
+          # Parsed with sed rather than an XML tool to avoid depending on
+          # xmllint being on whatever runner the caller picked.
+          find trx -type f -name '*.trx' > trx-files.txt 2>/dev/null || true
+
+          attr() {
+            # `[[:space:]]` on the left guards against matching a longer
+            # attribute that ends with the name we want.
+            printf '%s' "$1" | sed -n "s/.*[[:space:]]$2=\"\([0-9]*\)\".*/\1/p"
+          }
+
+          total=0; passed=0; failed=0; skipped=0; files=0
+          while IFS= read -r trx; do
+            [ -f "$trx" ] || continue
+            files=$((files + 1))
+            counters=$(tr -d '\n' < "$trx" | grep -o '<Counters[^>]*>' | head -1)
+            [ -n "$counters" ] || continue
+            t=$(attr "$counters" total)
+            p=$(attr "$counters" passed)
+            f=$(attr "$counters" failed)
+            n=$(attr "$counters" notExecuted)
+            total=$((total + ${t:-0}))
+            passed=$((passed + ${p:-0}))
+            failed=$((failed + ${f:-0}))
+            skipped=$((skipped + ${n:-0}))
+          done < trx-files.txt
+
+          if [ "$files" -eq 0 ]; then
+            outcome="no-tests"
+          elif [ "$failed" -gt 0 ]; then
+            outcome="failed"
+          else
+            outcome="passed"
+          fi
+
+          {
+            echo "total=${total}"
+            echo "passed=${passed}"
+            echo "failed=${failed}"
+            echo "skipped=${skipped}"
+            echo "outcome=${outcome}"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Test totals"
+            echo ""
+            echo "| Total | Passed | Failed | Skipped | Outcome |"
+            echo "|------:|-------:|-------:|--------:|:--------|"
+            echo "| ${total} | ${passed} | ${failed} | ${skipped} | ${outcome} |"
+            echo ""
+            echo "_Summed from ${files} trx file(s) across all shards._"
+          } >> "$GITHUB_STEP_SUMMARY"
