@@ -16,6 +16,30 @@ Reusable NuGet pack + push. Packs once and pushes every resulting package with
 
 Requires the `nuget-api-key` secret. Typically triggered on `release: published`.
 
+## Outputs
+
+| Output | Purpose |
+|---|---|
+| `version` | The version actually packed |
+| `packages` | Comma-separated `.nupkg` filenames that were packed and pushed |
+
+`version` is worth reading back rather than assuming: when the `version` input is
+empty it is derived from the release tag, so the caller does not know it up front.
+
+```yaml
+jobs:
+  publish:
+    uses: tibor-horvath/ci-toolkit/.github/workflows/nuget-publish.yml@v1
+    secrets:
+      nuget-api-key: ${{ secrets.NUGET_API_KEY }}
+
+  announce:
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Shipped ${{ needs.publish.outputs.packages }} at ${{ needs.publish.outputs.version }}"
+```
+
 ## Example
 
 ```yaml

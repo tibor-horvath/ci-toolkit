@@ -52,6 +52,16 @@ on:
         description: "Runner label."
         type: string
         default: "ubuntu-latest"
+    outputs:
+      version:
+        description: >-
+          The version actually packed — the `version` input when set, otherwise
+          the release tag with any leading 'v' stripped. Worth reading back,
+          since the derived case is not knowable to the caller up front.
+        value: ${{ jobs.publish.outputs.version }}
+      packages:
+        description: "Comma-separated .nupkg filenames that were packed and pushed."
+        value: ${{ jobs.publish.outputs.packages }}
     secrets:
       nuget-api-key:
         description: "API key for the target NuGet feed."
@@ -64,6 +74,9 @@ jobs:
   publish:
     name: NuGet Publish
     runs-on: ${{ inputs.runs-on }}
+    outputs:
+      version: ${{ steps.pack.outputs.version }}
+      packages: ${{ steps.pack.outputs.packages }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
@@ -80,6 +93,7 @@ jobs:
           restore-keys: ${{ runner.os }}-nuget-
 
       - name: Pack
+        id: pack
         shell: bash
         env:
           PROJECT: ${{ inputs.project }}
@@ -101,6 +115,15 @@ jobs:
           fi
           dotnet "${args[@]}"
           ls -1 artifacts
+
+          # Basenames only — the caller has no view of this runner's filesystem,
+          # so an absolute path would be noise.
+          pkgs=$(find artifacts -maxdepth 1 -name '*.nupkg' -printf '%f\n' \
+            | sort | paste -sd, -)
+          {
+            echo "version=${version}"
+            echo "packages=${pkgs}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Push
         shell: bash

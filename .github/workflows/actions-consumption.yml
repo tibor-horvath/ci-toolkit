@@ -45,6 +45,13 @@ on:
           a "remaining" figure. 0 (default) shows used/cost only.
         type: number
         default: 0
+    outputs:
+      total-minutes:
+        description: >-
+          Estimated billable minutes for the reported run — every job rounded up
+          to the minute × its OS multiplier. Lets a caller gate or alert on cost
+          instead of only reading the summary by eye.
+        value: ${{ jobs.report.outputs.total-minutes }}
     secrets:
       billing_token:
         description: >-
@@ -61,8 +68,11 @@ jobs:
   report:
     name: Actions Consumption
     runs-on: ${{ inputs.runs-on }}
+    outputs:
+      total-minutes: ${{ steps.report.outputs.total-minutes }}
     steps:
       - name: Report Actions usage
+        id: report
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -90,6 +100,7 @@ jobs:
               | { name, os: $os, dur: $dur, billed: ((($dur / 60) | ceil) * mult($os)) } ]')
 
           total=$(echo "$aug" | jq '[.[].billed] | add // 0')
+          echo "total-minutes=${total}" >> "$GITHUB_OUTPUT"
 
           {
             echo "## ⏱️ GitHub Actions consumption — run #${RUN_ID}"
