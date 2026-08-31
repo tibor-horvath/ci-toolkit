@@ -59,36 +59,49 @@ on:
         description: 'Add `--collect:"XPlat Code Coverage"` and upload the report.'
         type: boolean
         default: true
-      test-summary:
+      test-report:
         description: >-
-          Aggregate the trx results into workflow outputs (test counts). Off by
-          default because it costs an extra job: matrix outputs are
-          last-writer-wins, so shards cannot report totals themselves, and the
-          numbers have to be summed by a job that runs exactly once.
+          Run the post-test report job: sums the trx counters and merges the
+          per-shard coverage into workflow outputs and a job summary. Off by
+          default because it costs an extra job — matrix outputs are
+          last-writer-wins, so shards cannot aggregate anything themselves.
         type: boolean
         default: false
+      coverage-threshold:
+        description: >-
+          Fail the run when merged line coverage is below this percentage
+          (e.g. 80). 0 (default) reports without gating. Any value above 0
+          implies `test-report`, since the merge happens in that job.
+        type: number
+        default: 0
       runs-on:
         description: "Runner label."
         type: string
         default: "ubuntu-latest"
     outputs:
-      # All empty unless `test-summary` is enabled — a skipped job contributes
-      # empty strings rather than failing the caller's expression.
+      # All empty unless the report job runs — a skipped job contributes empty
+      # strings rather than failing the caller's expression.
       tests-total:
         description: "Total tests across every shard."
-        value: ${{ jobs.totals.outputs.total }}
+        value: ${{ jobs.report.outputs.tests-total }}
       tests-passed:
         description: "Passed tests across every shard."
-        value: ${{ jobs.totals.outputs.passed }}
+        value: ${{ jobs.report.outputs.tests-passed }}
       tests-failed:
         description: "Failed tests across every shard."
-        value: ${{ jobs.totals.outputs.failed }}
+        value: ${{ jobs.report.outputs.tests-failed }}
       tests-skipped:
         description: "Tests reported as not executed across every shard."
-        value: ${{ jobs.totals.outputs.skipped }}
+        value: ${{ jobs.report.outputs.tests-skipped }}
       tests-outcome:
         description: "`passed`, `failed`, or `no-tests` when no trx was produced."
-        value: ${{ jobs.totals.outputs.outcome }}
+        value: ${{ jobs.report.outputs.tests-outcome }}
+      coverage-line-rate:
+        description: "Merged line coverage as a percentage, one decimal (e.g. 84.2)."
+        value: ${{ jobs.report.outputs.coverage-line-rate }}
+      coverage-branch-rate:
+        description: "Merged branch coverage as a percentage, one decimal."
+        value: ${{ jobs.report.outputs.coverage-branch-rate }}
 
 permissions:
   checks: write
@@ -215,11 +228,11 @@ jobs:
           path: "**/TestResults/**/coverage.cobertura.xml"
           if-no-files-found: ignore
 
-      # The trx is what the totals job sums. `always()` so a failing shard still
+      # The trx is what the report job sums. `always()` so a failing shard still
       # contributes its counts — a run that reports 0 failures because the job
       # died is worse than no number at all.
       - name: Upload test results
-        if: ${{ always() && inputs.test-summary }}
+        if: ${{ always() && (inputs.test-report || inputs.coverage-threshold > 0) }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: test-results${{ matrix.shard != '' && format('-{0}', matrix.shard) || '' }}
@@ -227,18 +240,28 @@ jobs:
           retention-days: 1
           if-no-files-found: ignore
 
-  totals:
-    name: Test Totals
-    # `always()` so failed shards are still counted; the job itself only reports.
-    if: ${{ always() && inputs.run-tests && inputs.test-summary }}
+
+  report:
+    name: Test & Coverage
+    # One job for both aggregations. They have the same shape — wait for the
+    # matrix, pull the per-shard artifacts, reduce them — and splitting them
+    # would mean two billed minutes and two skipped jobs when disabled.
+    #
+    # A threshold implies the job: the merge that produces the number to gate
+    # on happens here, so requiring both flags would only be a trap.
+    if: >-
+      ${{ always() && inputs.run-tests
+          && (inputs.test-report || inputs.coverage-threshold > 0) }}
     needs: test
     runs-on: ${{ inputs.runs-on }}
     outputs:
-      total: ${{ steps.agg.outputs.total }}
-      passed: ${{ steps.agg.outputs.passed }}
-      failed: ${{ steps.agg.outputs.failed }}
-      skipped: ${{ steps.agg.outputs.skipped }}
-      outcome: ${{ steps.agg.outputs.outcome }}
+      tests-total: ${{ steps.tests.outputs.total }}
+      tests-passed: ${{ steps.tests.outputs.passed }}
+      tests-failed: ${{ steps.tests.outputs.failed }}
+      tests-skipped: ${{ steps.tests.outputs.skipped }}
+      tests-outcome: ${{ steps.tests.outputs.outcome }}
+      coverage-line-rate: ${{ steps.coverage.outputs.line-rate }}
+      coverage-branch-rate: ${{ steps.coverage.outputs.branch-rate }}
     steps:
       - name: Download test results
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -248,18 +271,18 @@ jobs:
           path: trx
 
       - name: Aggregate trx counters
-        id: agg
+        id: tests
         shell: bash
         run: |
-          # Every trx carries one <Counters .../> element holding the whole
-          # file's tallies, so summing that across shards is the entire job.
-          # Parsed with sed rather than an XML tool to avoid depending on
-          # xmllint being on whatever runner the caller picked.
+          # Every trx carries one <Counters .../> element holding that file's
+          # tallies, so summing it across shards is the whole job. Parsed with
+          # sed rather than an XML tool so this does not depend on xmllint
+          # being present on whatever runner the caller picked.
           find trx -type f -name '*.trx' > trx-files.txt 2>/dev/null || true
 
           attr() {
-            # `[[:space:]]` on the left guards against matching a longer
-            # attribute that ends with the name we want.
+            # `[[:space:]]` on the left stops `passed` matching the tail of
+            # `passedButRunAborted`.
             printf '%s' "$1" | sed -n "s/.*[[:space:]]$2=\"\([0-9]*\)\".*/\1/p"
           }
 
@@ -304,3 +327,94 @@ jobs:
             echo ""
             echo "_Summed from ${files} trx file(s) across all shards._"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Download coverage
+        if: ${{ inputs.collect-coverage }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: coverage*
+          merge-multiple: true
+          path: coverage
+
+      - name: Setup .NET
+        if: ${{ inputs.collect-coverage }}
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
+      - name: Merge coverage and check threshold
+        id: coverage
+        if: ${{ inputs.collect-coverage }}
+        shell: bash
+        env:
+          THRESHOLD: ${{ inputs.coverage-threshold }}
+        run: |
+          set -euo pipefail
+
+          # `-gt` would abort on a fractional threshold, so compare with awk.
+          over_zero() { awk -v t="${THRESHOLD:-0}" 'BEGIN { exit !(t + 0 > 0) }'; }
+
+          reports=$(find coverage -type f -name 'coverage.cobertura.xml' | wc -l)
+          if [ "$reports" -eq 0 ]; then
+            if over_zero; then
+              echo "::error::coverage-threshold is set to ${THRESHOLD} but no" \
+                   "cobertura reports were produced. Check that the test" \
+                   "projects reference coverlet.collector."
+              exit 1
+            fi
+            echo "::warning::No coverage reports found; nothing to merge."
+            exit 0
+          fi
+
+          # ReportGenerator as a local tool rather than a pinned third-party
+          # action: the SDK is already here, and it keeps the supply chain to
+          # what NuGet already provides.
+          dotnet tool install --global dotnet-reportgenerator-globaltool >/dev/null
+          export PATH="$PATH:$HOME/.dotnet/tools"
+
+          reportgenerator \
+            "-reports:coverage/**/coverage.cobertura.xml" \
+            "-targetdir:coverage-report" \
+            "-reporttypes:Cobertura;MarkdownSummaryGithub"
+
+          # The merged report's root element carries the overall rates as
+          # fractions; the caller wants percentages.
+          root=$(tr -d '\n' < coverage-report/Cobertura.xml \
+            | grep -o '<coverage[^>]*>' | head -1)
+          rate() {
+            printf '%s' "$root" \
+              | sed -n "s/.*[[:space:]]$1=\"\([0-9.]*\)\".*/\1/p"
+          }
+          line=$(rate line-rate); branch=$(rate branch-rate)
+          line_pct=$(awk -v r="${line:-0}" 'BEGIN { printf "%.1f", r * 100 }')
+          branch_pct=$(awk -v r="${branch:-0}" 'BEGIN { printf "%.1f", r * 100 }')
+
+          {
+            echo "line-rate=${line_pct}"
+            echo "branch-rate=${branch_pct}"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo ""
+            echo "## Coverage"
+            echo ""
+            cat coverage-report/SummaryGithub.md
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "Merged ${reports} report(s): line ${line_pct}%, branch ${branch_pct}%."
+
+          if over_zero; then
+            if awk -v p="$line_pct" -v t="$THRESHOLD" 'BEGIN { exit !(p + 0 < t + 0) }'; then
+              echo "::error::line coverage ${line_pct}% is below the ${THRESHOLD}% threshold"
+              exit 1
+            fi
+            echo "Line coverage ${line_pct}% meets the ${THRESHOLD}% threshold."
+          fi
+
+      - name: Upload merged coverage report
+        if: ${{ inputs.collect-coverage }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: coverage-merged
+          path: coverage-report
+          if-no-files-found: ignore

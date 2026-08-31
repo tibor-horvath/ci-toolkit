@@ -13,7 +13,8 @@ artifact). All third-party actions are SHA-pinned; NuGet packages are cached.
 | `test-filter` | `''` | Single `--filter` (ignored when `test-matrix` is set) |
 | `runsettings` | `''` | Path passed to `dotnet test --settings` (e.g. coverage include filters) |
 | `collect-coverage` | `true` | Collect `XPlat Code Coverage` and upload as an artifact |
-| `test-summary` | `false` | Sum the trx counters into workflow outputs. Adds one job — see [Outputs](#outputs) |
+| `test-report` | `false` | Aggregate trx counters and merge coverage into outputs + a job summary. Adds one job — see [Outputs](#outputs) |
+| `coverage-threshold` | `0` | Fail the run below this line-coverage percentage. `0` reports without gating; any value above 0 implies `test-report` |
 | `runs-on` | `ubuntu-latest` | Runner label |
 
 The calling job must grant `permissions: { checks: write, contents: read }` (for the
@@ -38,7 +39,8 @@ per shard.
 
 ## Outputs
 
-Off by default. Set `test-summary: true` to populate them.
+Off by default. Set `test-report: true` — or any `coverage-threshold` above 0,
+which implies it — to populate them.
 
 | Output | Purpose |
 |---|---|
@@ -47,16 +49,27 @@ Off by default. Set `test-summary: true` to populate them.
 | `tests-failed` | Failed tests across every shard |
 | `tests-skipped` | Tests reported as `notExecuted` across every shard |
 | `tests-outcome` | `passed`, `failed`, or `no-tests` when no trx was produced |
+| `coverage-line-rate` | Merged line coverage, percentage to one decimal (e.g. `84.2`) |
+| `coverage-branch-rate` | Merged branch coverage, percentage to one decimal |
 
-**Why this costs a job.** Matrix job outputs are last-writer-wins: whichever
-shard finishes last overwrites the rest, nondeterministically. Shards therefore
-cannot report totals themselves. Each uploads its trx instead, and a `Test
-Totals` job sums them once the matrix is done. That is a billed minute per run,
-which is why it is opt-in rather than always on — and why leaving it off means
-one extra *skipped* job in the run graph.
+**Why one extra job.** Matrix job outputs are last-writer-wins: whichever shard
+finishes last overwrites the rest, nondeterministically, so shards cannot
+aggregate anything themselves. Each uploads its trx and cobertura instead, and a
+single `Test & Coverage` job reduces them once the matrix is done. Test totals
+and coverage share that job deliberately — same shape, same artifacts pass, and
+splitting them would cost two billed minutes and leave two skipped jobs in the
+graph when disabled.
 
-The totals job runs under `always()`, so a failing shard still contributes its
-counts rather than silently reporting zero failures.
+Coverage was previously collected and uploaded by default but never read by
+anything. This is what consumes it: ReportGenerator merges the per-shard
+cobertura files, the merged HTML/Cobertura report is uploaded as
+`coverage-merged`, and the summary lands in the job summary.
+
+ReportGenerator is installed as a .NET global tool rather than pinned as a
+third-party action, keeping the trusted set to what NuGet already supplies.
+
+The job runs under `always()`, so a failing shard still contributes its counts
+rather than silently reporting zero failures.
 
 ```yaml
 jobs:
@@ -65,7 +78,7 @@ jobs:
     uses: tibor-horvath/ci-toolkit/.github/workflows/dotnet-build-test.yml@v1
     with:
       test-matrix: '["unit","integration"]'
-      test-summary: true
+      coverage-threshold: 80      # implies test-report
     permissions:
       checks: write
       contents: read
@@ -75,7 +88,9 @@ jobs:
     if: ${{ needs.dotnet.outputs.tests-failed != '0' }}
     runs-on: ubuntu-latest
     steps:
-      - run: echo "${{ needs.dotnet.outputs.tests-failed }} of ${{ needs.dotnet.outputs.tests-total }} failed"
+      - run: |
+          echo "${{ needs.dotnet.outputs.tests-failed }} of ${{ needs.dotnet.outputs.tests-total }} failed"
+          echo "line coverage ${{ needs.dotnet.outputs.coverage-line-rate }}%"
 ```
 
 ## Check names
