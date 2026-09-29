@@ -1,5 +1,7 @@
 # ci-toolkit
 
+[![Built by Tibor Horváth](https://tiborhorvath.dev/badge/built-by-compact.svg)](https://tiborhorvath.dev)
+
 Reusable GitHub Actions workflows for building, testing, and shipping projects.
 Stack-neutral by name, so pipelines for any language can coexist here.
 
