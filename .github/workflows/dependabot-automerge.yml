@@ -1,0 +1,54 @@
+name: Dependabot Automerge
+
+# Auto-approves and auto-merges Dependabot PRs that are minor or patch bumps.
+#
+# Major bumps are deliberately left alone: `dependabot.yml` already splits them
+# into one PR per action so each gets read, and `@v1` consumers inherit whatever
+# lands here on the next release.
+#
+# `gh pr merge --auto` only queues the merge; GitHub performs it once every
+# required status check on `main` is green. So the gate is the branch protection
+# rule, not this workflow — if `main` requires no checks, `--auto` merges at
+# once.
+#
+# One-time repo setup this depends on:
+#   - Settings > General > Pull Requests > "Allow auto-merge"
+#   - Settings > Actions > General > "Allow GitHub Actions to create and approve
+#     pull requests" (the approval step, for the required-review rule)
+#   - A branch protection rule / ruleset on `main` that requires the
+#     `Self Check` jobs to pass.
+
+on:
+  pull_request:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  automerge:
+    name: Automerge minor and patch
+    runs-on: ubuntu-latest
+    # `github.actor` is the account that triggered this run; a human pushing to
+    # a Dependabot branch changes it, so a modified PR is not merged unseen.
+    if: github.event.pull_request.user.login == 'dependabot[bot]' && github.actor == 'dependabot[bot]'
+    steps:
+      - name: Fetch Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Approve and enable auto-merge
+        # For a grouped PR `update-type` is the highest bump in the group, so a
+        # single major inside it keeps the whole PR out.
+        if: steps.metadata.outputs.update-type == 'version-update:semver-minor' || steps.metadata.outputs.update-type == 'version-update:semver-patch'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          set -euo pipefail
+          gh pr review --approve "$PR_URL"
+          # Squash keeps the single conventional-commit title release-please reads.
+          gh pr merge --auto --squash "$PR_URL"
