@@ -77,6 +77,95 @@ jobs:
     permissions:
       contents: read
 
+  # Structural YAML checks. actionlint understands workflows but not the other
+  # YAML here (action.yml, dependabot.yml, fixtures), and reports duplicate keys
+  # less clearly than a dedicated linter.
+  yamllint:
+    name: yamllint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+
+      - name: Install yamllint
+        # Bump manually — dependabot does not track versions held in run steps.
+        run: pip install --quiet yamllint==1.37.1
+
+      - name: Lint YAML
+        run: yamllint --strict -c .yamllint.yml .github tests .yamllint.yml
+
+  # Every reusable workflow must appear in the README and have a docs page that
+  # names each of its inputs, secrets and outputs.
+  docs-consistency:
+    name: Docs match workflow interfaces
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+
+      - name: Check README and docs/
+        run: |
+          pip install --quiet pyyaml==6.0.2
+          python .github/scripts/check-docs.py
+
+  # Runtime smoke tests. actionlint cannot tell whether a script path or an
+  # input name actually works — these run the reusable workflows for real
+  # against dependency-free fixtures in tests/fixtures.
+  smoke-node-build-test:
+    name: Smoke - node-build-test
+    uses: ./.github/workflows/node-build-test.yml
+    with:
+      working-directory: tests/fixtures/node-app
+      test-shards: 2
+      test-args: "--run"
+    permissions:
+      contents: read
+
+  smoke-node-audit:
+    name: Smoke - node-audit
+    uses: ./.github/workflows/node-audit.yml
+    with:
+      working-directory: tests/fixtures/node-app
+    permissions:
+      contents: read
+
+  smoke-dotnet-build-test:
+    name: Smoke - dotnet-build-test
+    uses: ./.github/workflows/dotnet-build-test.yml
+    with:
+      build-project: tests/fixtures/dotnet-app/Fixture.slnx
+      test-matrix: '["unit"]'
+    permissions:
+      checks: write
+      contents: read
+
+  # A reusable workflow with no `permissions:` inherits the caller's default
+  # token scope, which is often read-write. Require every workflow to declare
+  # its own, or opt out deliberately with `# self-check: inherit-permissions`
+  # (for workflows whose needs depend on the caller, e.g. docker-publish).
+  explicit-permissions:
+    name: Workflows declare permissions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+
+      - name: Check every workflow declares `permissions:`
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          fail=0
+          for f in .github/workflows/*.yml; do
+            if grep -qE '^[[:space:]]*# self-check: inherit-permissions' "$f"; then
+              echo "  skip  ${f} (inherits caller permissions by design)"
+            elif grep -qE '^[[:space:]]*permissions:' "$f"; then
+              echo "  ok    ${f}"
+            else
+              echo "::error file=${f}::no \`permissions:\` block (top-level or per-job)"
+              fail=1
+            fi
+          done
+
+          exit "$fail"
+
   pinned-actions:
     name: Actions are SHA-pinned
     runs-on: ubuntu-latest
@@ -89,8 +178,9 @@ jobs:
           set -euo pipefail
 
           # Only real `uses:` keys — a leading `#` (the caller examples in the
-          # header comments) does not match.
-          grep -rnE '^[[:space:]]*-?[[:space:]]*uses:' .github/workflows > uses.txt || true
+          # header comments) does not match. Composite actions under
+          # .github/actions carry third-party `uses:` too.
+          grep -rnE '^[[:space:]]*-?[[:space:]]*uses:' .github/workflows .github/actions > uses.txt || true
 
           fail=0
           while IFS= read -r hit; do

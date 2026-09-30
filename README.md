@@ -42,6 +42,8 @@ Pin callers to the moving major tag: **`@v1`**. All third-party actions are SHA-
 
 Each doc page lists the workflow's inputs/secrets and copy-paste caller examples.
 
+Contributing? See [CONTRIBUTING.md](CONTRIBUTING.md) for the checks every PR must pass.
+
 ## Quick start
 
 ```yaml

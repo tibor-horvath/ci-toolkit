@@ -4,3 +4,8 @@ Thumbs.db
 *.swp
 .idea/
 .vscode/
+
+# Smoke-test fixture build output
+tests/fixtures/**/dist/
+tests/fixtures/**/bin/
+tests/fixtures/**/obj/

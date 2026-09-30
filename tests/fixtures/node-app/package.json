@@ -1,0 +1,12 @@
+{
+  "name": "ci-toolkit-node-fixture",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Dependency-free fixture used by the toolkit's self-check to smoke-test the Node reusable workflows.",
+  "scripts": {
+    "lint": "node scripts/step.js lint",
+    "typecheck": "node scripts/step.js typecheck",
+    "test": "node scripts/step.js test",
+    "build": "node scripts/build.js"
+  }
+}
