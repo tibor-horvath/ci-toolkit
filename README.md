@@ -9,13 +9,35 @@ Pin callers to the moving major tag: **`@v1`**. All third-party actions are SHA-
 
 ## Workflows
 
+### .NET
+
 | Workflow | Purpose | Docs |
 |---|---|---|
 | `dotnet-build-test.yml` | .NET build + test — build-once/test-in-parallel sharding, coverage, trx report | [docs](docs/dotnet-build-test.md) |
-| `docker-publish.yml` | Docker build + push to any registry (Buildx, GHA cache) | [docs](docs/docker-publish.md) |
 | `nuget-publish.yml` | NuGet pack + push (idempotent, `--skip-duplicate`) | [docs](docs/nuget-publish.md) |
-| `actions-consumption.yml` | Report a run's Actions usage (per OS / per job, optional account balance) | [docs](docs/actions-consumption.md) |
+
+### Node / React
+
+| Workflow | Purpose | Docs |
+|---|---|---|
+| `node-build-test.yml` | Node/React lint, typecheck, test (sharded) and build — npm/pnpm/yarn auto-detected, script-driven | [docs](docs/node-build-test.md) |
+| `node-audit.yml` | Dependency vulnerability audit from the lockfile (npm/pnpm/yarn), severity threshold, prod-only by default | [docs](docs/node-audit.md) |
+| `bundle-size.yml` | Builds PR and base, posts gzip/raw size delta as a PR comment, optional size gate | [docs](docs/bundle-size.md) |
+| `lighthouse-ci.yml` | Lighthouse CI on the static build with minimum category scores; reports kept private as an artifact | [docs](docs/lighthouse-ci.md) |
+| Dependabot template | `dependabot.yml` for Node/React repos — grouped React/tooling/lint updates | [docs](docs/dependabot-node.md) |
+
+### Containers
+
+| Workflow | Purpose | Docs |
+|---|---|---|
+| `docker-publish.yml` | Docker build + push to any registry (Buildx, GHA cache) | [docs](docs/docker-publish.md) |
+
+### Any stack
+
+| Workflow | Purpose | Docs |
+|---|---|---|
 | `secret-scan.yml` | Scan commits/PRs for leaked API keys, tokens and connection strings (gitleaks) | [docs](docs/secret-scan.md) |
+| `actions-consumption.yml` | Report a run's Actions usage (per OS / per job, optional account balance) | [docs](docs/actions-consumption.md) |
 | `.github/actions/cache` | Composite action: NuGet + build-output caching with restore-key fallbacks | [docs](docs/caching.md) |
 
 Each doc page lists the workflow's inputs/secrets and copy-paste caller examples.

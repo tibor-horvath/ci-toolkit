@@ -1,0 +1,312 @@
+name: Bundle Size Report (reusable)
+
+# Builds the PR and its base commit, measures both build output directories, and
+# posts the difference as a single, updated-in-place PR comment. Tool-agnostic:
+# it measures whatever your build script writes to `build-output-dir`, so it
+# works for any bundler, not just Vite.
+#
+#   head build ─┐
+#               ├─▶ raw + gzip size per build ─▶ delta table ─▶ PR comment
+#   base build ─┘                                                (+ optional gate)
+#
+# Only meaningful on pull requests. Call it with:
+#   on: { pull_request: { branches: [main] } }
+#   jobs:
+#     size:
+#       uses: tibor-horvath/ci-toolkit/.github/workflows/bundle-size.yml@v1
+#       permissions: { contents: read, pull-requests: write }
+
+on:
+  workflow_call:
+    inputs:
+      max-gzip-increase-kb:
+        description: >-
+          Fail when the gzip size grows by more than this many KB versus the
+          base. Empty -> report only, never fail.
+        type: string
+        default: ""
+      compress-extensions:
+        description: "Space-separated extensions counted in the gzip total (text assets compress; images mostly do not)."
+        type: string
+        default: "js mjs css html svg json"
+      build-script:
+        description: "package.json script that produces the build."
+        type: string
+        default: "build"
+      build-output-dir:
+        description: "Build output directory relative to working-directory."
+        type: string
+        default: "dist"
+      build-env:
+        description: "Newline-separated KEY=VALUE pairs for the build. Public values only."
+        type: string
+        default: ""
+      comment:
+        description: "Post the PR comment. The size table is always written to the job summary."
+        type: boolean
+        default: true
+      package-manager:
+        description: "`npm`, `pnpm` or `yarn`. Empty -> detected from the lockfile."
+        type: string
+        default: ""
+      pnpm-version:
+        description: "pnpm version. Empty -> the `packageManager` field in package.json."
+        type: string
+        default: ""
+      node-version:
+        description: "Node.js version. Ignored when node-version-file is set."
+        type: string
+        default: "22.x"
+      node-version-file:
+        description: "File holding the Node version (e.g. .nvmrc), relative to the repo root."
+        type: string
+        default: ""
+      working-directory:
+        description: "Directory containing package.json and the lockfile."
+        type: string
+        default: "."
+      install-command:
+        description: "Override the dependency install. Empty -> frozen-lockfile install."
+        type: string
+        default: ""
+      runs-on:
+        description: "Runner label."
+        type: string
+        default: "ubuntu-latest"
+    secrets:
+      npm-token:
+        description: "Optional registry auth token, exposed as NODE_AUTH_TOKEN during install."
+        required: false
+    outputs:
+      head-gzip-bytes:
+        description: "Gzip size of the PR build, in bytes."
+        value: ${{ jobs.size.outputs.head-gzip }}
+      base-gzip-bytes:
+        description: "Gzip size of the base build, in bytes."
+        value: ${{ jobs.size.outputs.base-gzip }}
+      gzip-delta-bytes:
+        description: "PR minus base, gzip bytes. Positive means the bundle grew."
+        value: ${{ jobs.size.outputs.delta }}
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  size:
+    name: Bundle size
+    if: ${{ github.event_name == 'pull_request' || github.event_name == 'pull_request_target' }}
+    runs-on: ${{ inputs.runs-on }}
+    outputs:
+      head-gzip: ${{ steps.measure.outputs.head_gzip }}
+      base-gzip: ${{ steps.measure.outputs.base_gzip }}
+      delta: ${{ steps.measure.outputs.delta }}
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          path: head
+
+      - name: Checkout base
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+
+      - name: Detect package manager
+        id: pm
+        env:
+          PM_INPUT: ${{ inputs.package-manager }}
+        working-directory: head/${{ inputs.working-directory }}
+        run: |
+          pm="$PM_INPUT"
+          if [ -z "$pm" ]; then
+            if [ -f pnpm-lock.yaml ]; then pm=pnpm
+            elif [ -f yarn.lock ]; then pm=yarn
+            else pm=npm
+            fi
+          fi
+          case "$pm" in
+            npm)  lock=package-lock.json ;;
+            pnpm) lock=pnpm-lock.yaml ;;
+            yarn) lock=yarn.lock ;;
+            *) echo "::error::package-manager must be npm, pnpm or yarn (got '$pm')"; exit 1 ;;
+          esac
+          echo "name=$pm" >> "$GITHUB_OUTPUT"
+          echo "lockfile=$lock" >> "$GITHUB_OUTPUT"
+
+      - name: Setup pnpm
+        if: ${{ steps.pm.outputs.name == 'pnpm' }}
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: ${{ inputs.pnpm-version }}
+          package_json_file: head/${{ inputs.working-directory }}/package.json
+
+      - name: Enable corepack
+        if: ${{ steps.pm.outputs.name == 'yarn' }}
+        run: corepack enable
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ inputs.node-version-file == '' && inputs.node-version || '' }}
+          node-version-file: ${{ inputs.node-version-file != '' && format('head/{0}', inputs.node-version-file) || '' }}
+          cache: ${{ steps.pm.outputs.name }}
+          cache-dependency-path: head/${{ inputs.working-directory }}/${{ steps.pm.outputs.lockfile }}
+
+      # One loop for both trees so they are built identically. The base may use
+      # an older lockfile, which is why it is installed on its own rather than
+      # sharing the PR's node_modules.
+      - name: Install and build (PR and base)
+        shell: bash
+        env:
+          PM: ${{ steps.pm.outputs.name }}
+          INSTALL_COMMAND: ${{ inputs.install-command }}
+          SCRIPT: ${{ inputs.build-script }}
+          BUILD_ENV: ${{ inputs.build-env }}
+          WORKDIR: ${{ inputs.working-directory }}
+          NODE_AUTH_TOKEN: ${{ secrets.npm-token }}
+        run: |
+          set -euo pipefail
+          for tree in head base; do
+            echo "::group::${tree}: install and build"
+            cd "${GITHUB_WORKSPACE}/${tree}/${WORKDIR}"
+
+            if [ -n "$INSTALL_COMMAND" ]; then
+              bash -c "$INSTALL_COMMAND"
+            elif [ "$PM" = "npm" ]; then
+              npm ci
+            elif [ "$PM" = "pnpm" ]; then
+              pnpm install --frozen-lockfile
+            elif [[ "$(yarn --version)" == 1.* ]]; then
+              yarn install --frozen-lockfile
+            else
+              yarn install --immutable
+            fi
+
+            while IFS= read -r line; do
+              [ -n "$line" ] || continue
+              # Each line is a whole KEY=VALUE pair, which is what export takes.
+              # shellcheck disable=SC2163
+              export "$line"
+            done <<< "$BUILD_ENV"
+            "$PM" run "$SCRIPT"
+            echo "::endgroup::"
+          done
+
+      - name: Measure
+        id: measure
+        shell: bash
+        env:
+          WORKDIR: ${{ inputs.working-directory }}
+          OUT: ${{ inputs.build-output-dir }}
+          EXTS: ${{ inputs.compress-extensions }}
+          MAX_KB: ${{ inputs.max-gzip-increase-kb }}
+        run: |
+          set -euo pipefail
+
+          # Prints "<raw bytes> <gzip bytes> <file count>" for a directory. Raw
+          # is every file; gzip counts only the compressible extensions, each
+          # compressed on its own the way a server would serve it.
+          measure() {
+            local dir="$1" raw=0 gz=0 n=0 size ext
+            [ -d "$dir" ] || { echo "::error::build output not found: $dir"; return 1; }
+            while IFS= read -r -d '' f; do
+              size=$(wc -c < "$f")
+              raw=$((raw + size))
+              n=$((n + 1))
+              ext="${f##*.}"
+              for want in $EXTS; do
+                if [ "$ext" = "$want" ]; then
+                  gz=$((gz + $(gzip -9 -c "$f" | wc -c)))
+                  break
+                fi
+              done
+            done < <(find "$dir" -type f -print0)
+            echo "$raw $gz $n"
+          }
+
+          read -r head_raw head_gz head_n < <(measure "${GITHUB_WORKSPACE}/head/${WORKDIR}/${OUT}")
+          read -r base_raw base_gz base_n < <(measure "${GITHUB_WORKSPACE}/base/${WORKDIR}/${OUT}")
+
+          delta=$((head_gz - base_gz))
+          raw_delta=$((head_raw - base_raw))
+
+          pct() {
+            # Integer maths with one decimal; a zero base has no percentage.
+            if [ "$2" -eq 0 ]; then echo "n/a"; return; fi
+            awk -v d="$1" -v b="$2" 'BEGIN { printf "%+.1f%%", d * 100 / b }'
+          }
+          kb() { awk -v b="$1" 'BEGIN { printf "%+.2f KB", b / 1024 }'; }
+          abs_kb() { awk -v b="$1" 'BEGIN { printf "%.2f KB", b / 1024 }'; }
+
+          {
+            echo "head_gzip=${head_gz}"
+            echo "base_gzip=${base_gz}"
+            echo "delta=${delta}"
+          } >> "$GITHUB_OUTPUT"
+
+          gate="report only"
+          verdict=""
+          if [ -n "$MAX_KB" ]; then
+            gate="fails above +${MAX_KB} KB gzip"
+            over=$(awk -v d="$delta" -v m="$MAX_KB" 'BEGIN { print (d > m * 1024) ? 1 : 0 }')
+            if [ "$over" -eq 1 ]; then verdict="fail"; else verdict="pass"; fi
+          fi
+
+          {
+            echo "<!-- ci-toolkit:bundle-size -->"
+            echo "## Bundle size"
+            echo ""
+            echo "| | Base | PR | Change |"
+            echo "|---|---:|---:|---:|"
+            echo "| **Gzip** (${EXTS}) | $(abs_kb "$base_gz") | $(abs_kb "$head_gz") | $(kb "$delta") ($(pct "$delta" "$base_gz")) |"
+            echo "| Raw (all files) | $(abs_kb "$base_raw") | $(abs_kb "$head_raw") | $(kb "$raw_delta") ($(pct "$raw_delta" "$base_raw")) |"
+            echo "| Files | ${base_n} | ${head_n} | $((head_n - base_n)) |"
+            echo ""
+            case "$verdict" in
+              fail) echo "**Over budget:** gzip grew by more than ${MAX_KB} KB." ;;
+              pass) echo "Within budget (${gate})." ;;
+              *)    echo "_Gate: ${gate}._" ;;
+            esac
+          } > size-report.md
+
+          cat size-report.md >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$verdict" = "fail" ]; then
+            echo "verdict=fail" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Forked PRs get a read-only token, so the comment can legitimately fail
+      # there. The table is already in the job summary, so that is not fatal.
+      - name: Comment on PR
+        if: ${{ always() && inputs.comment && hashFiles('size-report.md') != '' }}
+        continue-on-error: true
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('size-report.md', 'utf8');
+            const marker = '<!-- ci-toolkit:bundle-size -->';
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number, per_page: 100,
+            });
+            const existing = comments.find(c => c.body && c.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+
+      - name: Enforce budget
+        if: ${{ steps.measure.outputs.verdict == 'fail' }}
+        shell: bash
+        env:
+          MAX_KB: ${{ inputs.max-gzip-increase-kb }}
+        run: |
+          echo "::error::Gzip bundle size grew by more than ${MAX_KB} KB versus the base."
+          exit 1

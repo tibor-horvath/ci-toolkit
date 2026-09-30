@@ -1,0 +1,150 @@
+name: Node Dependency Audit (reusable)
+
+# Checks the lockfile against the registry's advisory database with the package
+# manager's own audit command. No install is needed: npm, pnpm and yarn all
+# audit from the lockfile alone, so this is one fast job with no dependency
+# cache.
+#
+# Advisories appear without any change in your code, so a PR-only trigger
+# misses them. Call this on a schedule as well as on PRs:
+#   on:
+#     pull_request:
+#     schedule: [{ cron: '0 6 * * 1' }]
+#   jobs:
+#     audit:
+#       uses: tibor-horvath/ci-toolkit/.github/workflows/node-audit.yml@v1
+#       permissions: { contents: read }
+
+on:
+  workflow_call:
+    inputs:
+      audit-level:
+        description: "Lowest severity that fails the job: `low`, `moderate`, `high` or `critical`."
+        type: string
+        default: "high"
+      production-only:
+        description: >-
+          Audit only runtime dependencies. A Vite app ships its bundle, not
+          its devDependencies, so a build-tool advisory is rarely exploitable
+          and mostly noise. Set false to audit everything.
+        type: boolean
+        default: true
+      fail-on-findings:
+        description: "Fail the job on findings. False makes it advisory: findings are logged, the job passes."
+        type: boolean
+        default: true
+      package-manager:
+        description: "`npm`, `pnpm` or `yarn`. Empty -> detected from the lockfile."
+        type: string
+        default: ""
+      pnpm-version:
+        description: "pnpm version. Empty -> the `packageManager` field in package.json."
+        type: string
+        default: ""
+      node-version:
+        description: "Node.js version. Ignored when node-version-file is set."
+        type: string
+        default: "22.x"
+      node-version-file:
+        description: "File holding the Node version (e.g. .nvmrc)."
+        type: string
+        default: ""
+      working-directory:
+        description: "Directory containing package.json and the lockfile."
+        type: string
+        default: "."
+      runs-on:
+        description: "Runner label."
+        type: string
+        default: "ubuntu-latest"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Audit
+    runs-on: ${{ inputs.runs-on }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+
+      - name: Detect package manager
+        id: pm
+        env:
+          PM_INPUT: ${{ inputs.package-manager }}
+        run: |
+          pm="$PM_INPUT"
+          if [ -z "$pm" ]; then
+            if [ -f pnpm-lock.yaml ]; then pm=pnpm
+            elif [ -f yarn.lock ]; then pm=yarn
+            else pm=npm
+            fi
+          fi
+          case "$pm" in
+            npm|pnpm|yarn) ;;
+            *) echo "::error::package-manager must be npm, pnpm or yarn (got '$pm')"; exit 1 ;;
+          esac
+          echo "name=$pm" >> "$GITHUB_OUTPUT"
+
+      - name: Setup pnpm
+        if: ${{ steps.pm.outputs.name == 'pnpm' }}
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: ${{ inputs.pnpm-version }}
+          package_json_file: ${{ inputs.working-directory }}/package.json
+
+      - name: Enable corepack
+        if: ${{ steps.pm.outputs.name == 'yarn' }}
+        run: corepack enable
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ inputs.node-version-file == '' && inputs.node-version || '' }}
+          node-version-file: ${{ inputs.node-version-file != '' && format('{0}/{1}', inputs.working-directory, inputs.node-version-file) || '' }}
+
+      - name: Audit
+        env:
+          PM: ${{ steps.pm.outputs.name }}
+          LEVEL: ${{ inputs.audit-level }}
+          PROD: ${{ inputs.production-only }}
+          FAIL: ${{ inputs.fail-on-findings }}
+        run: |
+          case "$LEVEL" in
+            low|moderate|high|critical) ;;
+            *) echo "::error::audit-level must be low, moderate, high or critical (got '$LEVEL')"; exit 1 ;;
+          esac
+
+          args=()
+          if [ "$PM" = "npm" ]; then
+            cmd=(npm audit --audit-level="$LEVEL")
+            if [ "$PROD" = "true" ]; then args+=(--omit=dev); fi
+          elif [ "$PM" = "pnpm" ]; then
+            cmd=(pnpm audit --audit-level "$LEVEL")
+            if [ "$PROD" = "true" ]; then args+=(--prod); fi
+          elif [[ "$(yarn --version)" == 1.* ]]; then
+            cmd=(yarn audit --level "$LEVEL")
+            if [ "$PROD" = "true" ]; then args+=(--groups dependencies); fi
+          else
+            cmd=(yarn npm audit --severity "$LEVEL")
+            if [ "$PROD" = "true" ]; then args+=(--environment production); fi
+          fi
+
+          echo "${cmd[*]} ${args[*]:-}"
+          set +e
+          "${cmd[@]}" "${args[@]}"
+          status=$?
+          set -e
+
+          if [ "$status" -eq 0 ]; then
+            echo "No advisories at or above '$LEVEL'."
+          elif [ "$FAIL" = "true" ]; then
+            echo "::error::Audit found advisories at or above '$LEVEL' (exit $status)."
+            exit "$status"
+          else
+            echo "::warning::Audit found advisories at or above '$LEVEL' (exit $status); fail-on-findings is off."
+          fi
