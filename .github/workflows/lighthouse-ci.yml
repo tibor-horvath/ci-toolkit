@@ -1,0 +1,244 @@
+name: Lighthouse CI (reusable)
+
+# Builds the app, serves the build output with Lighthouse CI's static server,
+# audits it, and fails if a category score drops below your minimums. Reports
+# are kept as a workflow artifact.
+#
+#   install ─▶ build ─▶ lhci (serves build-output-dir, runs N audits) ─▶ assert
+#
+# Reports are NOT uploaded to Lighthouse's public temporary storage. That
+# service publishes results at a public URL, which is wrong for a private repo,
+# so the upload target is pinned to the local filesystem.
+#
+# Call it with:
+#   jobs:
+#     lighthouse:
+#       uses: tibor-horvath/ci-toolkit/.github/workflows/lighthouse-ci.yml@v1
+#       with: { min-performance: 0.8, min-accessibility: 0.9 }
+#       permissions: { contents: read }
+
+on:
+  workflow_call:
+    inputs:
+      min-performance:
+        description: "Minimum performance score, 0 to 1. Empty -> not asserted."
+        type: string
+        default: ""
+      min-accessibility:
+        description: "Minimum accessibility score, 0 to 1. Empty -> not asserted."
+        type: string
+        default: ""
+      min-best-practices:
+        description: "Minimum best-practices score, 0 to 1. Empty -> not asserted."
+        type: string
+        default: ""
+      min-seo:
+        description: "Minimum SEO score, 0 to 1. Empty -> not asserted."
+        type: string
+        default: ""
+      config-path:
+        description: >-
+          Path to your own lighthouserc (.json, .js, .cjs), for budgets and
+          per-audit assertions. When set, the `min-*` inputs are ignored. The
+          static directory and filesystem upload target are still forced.
+        type: string
+        default: ""
+      number-of-runs:
+        description: "Audits per page. The median is used, which steadies noisy scores. Generated config only."
+        type: number
+        default: 3
+      lhci-version:
+        description: "@lhci/cli version, pinned so a new release cannot change scores under you."
+        type: string
+        default: "0.15.1"
+      build-script:
+        description: "package.json script that produces the build."
+        type: string
+        default: "build"
+      build-output-dir:
+        description: "Build output directory relative to working-directory, served for the audit."
+        type: string
+        default: "dist"
+      build-env:
+        description: "Newline-separated KEY=VALUE pairs for the build. Public values only."
+        type: string
+        default: ""
+      package-manager:
+        description: "`npm`, `pnpm` or `yarn`. Empty -> detected from the lockfile."
+        type: string
+        default: ""
+      pnpm-version:
+        description: "pnpm version. Empty -> the `packageManager` field in package.json."
+        type: string
+        default: ""
+      node-version:
+        description: "Node.js version. Ignored when node-version-file is set."
+        type: string
+        default: "22.x"
+      node-version-file:
+        description: "File holding the Node version (e.g. .nvmrc)."
+        type: string
+        default: ""
+      working-directory:
+        description: "Directory containing package.json and the lockfile."
+        type: string
+        default: "."
+      install-command:
+        description: "Override the dependency install. Empty -> frozen-lockfile install."
+        type: string
+        default: ""
+      artifact-retention-days:
+        description: "Retention for the Lighthouse report artifact."
+        type: number
+        default: 7
+      runs-on:
+        description: "Runner label."
+        type: string
+        default: "ubuntu-latest"
+    secrets:
+      npm-token:
+        description: "Optional registry auth token, exposed as NODE_AUTH_TOKEN during install."
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  lighthouse:
+    name: Lighthouse
+    runs-on: ${{ inputs.runs-on }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+
+      - name: Detect package manager
+        id: pm
+        env:
+          PM_INPUT: ${{ inputs.package-manager }}
+        run: |
+          pm="$PM_INPUT"
+          if [ -z "$pm" ]; then
+            if [ -f pnpm-lock.yaml ]; then pm=pnpm
+            elif [ -f yarn.lock ]; then pm=yarn
+            else pm=npm
+            fi
+          fi
+          case "$pm" in
+            npm)  lock=package-lock.json ;;
+            pnpm) lock=pnpm-lock.yaml ;;
+            yarn) lock=yarn.lock ;;
+            *) echo "::error::package-manager must be npm, pnpm or yarn (got '$pm')"; exit 1 ;;
+          esac
+          echo "name=$pm" >> "$GITHUB_OUTPUT"
+          echo "lockfile=$lock" >> "$GITHUB_OUTPUT"
+
+      - name: Setup pnpm
+        if: ${{ steps.pm.outputs.name == 'pnpm' }}
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: ${{ inputs.pnpm-version }}
+          package_json_file: ${{ inputs.working-directory }}/package.json
+
+      - name: Enable corepack
+        if: ${{ steps.pm.outputs.name == 'yarn' }}
+        run: corepack enable
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ inputs.node-version-file == '' && inputs.node-version || '' }}
+          node-version-file: ${{ inputs.node-version-file != '' && format('{0}/{1}', inputs.working-directory, inputs.node-version-file) || '' }}
+          cache: ${{ steps.pm.outputs.name }}
+          cache-dependency-path: ${{ inputs.working-directory }}/${{ steps.pm.outputs.lockfile }}
+
+      - name: Install dependencies
+        env:
+          PM: ${{ steps.pm.outputs.name }}
+          INSTALL_COMMAND: ${{ inputs.install-command }}
+          NODE_AUTH_TOKEN: ${{ secrets.npm-token }}
+        run: |
+          if [ -n "$INSTALL_COMMAND" ]; then
+            bash -c "$INSTALL_COMMAND"
+          elif [ "$PM" = "npm" ]; then
+            npm ci
+          elif [ "$PM" = "pnpm" ]; then
+            pnpm install --frozen-lockfile
+          elif [[ "$(yarn --version)" == 1.* ]]; then
+            yarn install --frozen-lockfile
+          else
+            yarn install --immutable
+          fi
+
+      - name: Build
+        env:
+          PM: ${{ steps.pm.outputs.name }}
+          SCRIPT: ${{ inputs.build-script }}
+          BUILD_ENV: ${{ inputs.build-env }}
+        run: |
+          while IFS= read -r line; do
+            [ -n "$line" ] || continue
+            export "$line"
+          done <<< "$BUILD_ENV"
+          "$PM" run "$SCRIPT"
+
+      # Without a config file, assertions are generated from the `min-*`
+      # inputs. jq builds the JSON so a stray quote in an input cannot break it.
+      - name: Generate Lighthouse config
+        if: ${{ inputs.config-path == '' }}
+        env:
+          RUNS: ${{ inputs.number-of-runs }}
+          MIN_PERF: ${{ inputs.min-performance }}
+          MIN_A11Y: ${{ inputs.min-accessibility }}
+          MIN_BP: ${{ inputs.min-best-practices }}
+          MIN_SEO: ${{ inputs.min-seo }}
+        run: |
+          jq -n \
+            --argjson runs "$RUNS" \
+            --arg perf "$MIN_PERF" --arg a11y "$MIN_A11Y" \
+            --arg bp "$MIN_BP" --arg seo "$MIN_SEO" '
+            def gate(name; v):
+              if v == "" then {} else { ("categories:" + name): ["error", {minScore: (v | tonumber)}] } end;
+            {
+              ci: {
+                collect: {
+                  numberOfRuns: $runs,
+                  settings: { chromeFlags: "--no-sandbox --headless=new" }
+                },
+                assert: {
+                  assertions: (
+                    gate("performance"; $perf)
+                    + gate("accessibility"; $a11y)
+                    + gate("best-practices"; $bp)
+                    + gate("seo"; $seo)
+                  )
+                }
+              }
+            }' > "${RUNNER_TEMP}/lighthouserc.json"
+          cat "${RUNNER_TEMP}/lighthouserc.json"
+
+      - name: Run Lighthouse CI
+        env:
+          LHCI_VERSION: ${{ inputs.lhci-version }}
+          CONFIG_PATH: ${{ inputs.config-path }}
+          OUT: ${{ inputs.build-output-dir }}
+        run: |
+          config="${CONFIG_PATH:-${RUNNER_TEMP}/lighthouserc.json}"
+          # Flags win over the config file, so the served directory and the
+          # private upload target hold even for a caller-supplied config.
+          npx --yes "@lhci/cli@${LHCI_VERSION}" autorun \
+            --config="$config" \
+            --collect.staticDistDir="$OUT" \
+            --upload.target=filesystem \
+            --upload.outputDir=.lighthouseci
+
+      - name: Upload Lighthouse reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: lighthouse-reports
+          path: ${{ inputs.working-directory }}/.lighthouseci
+          retention-days: ${{ inputs.artifact-retention-days }}
+          if-no-files-found: ignore

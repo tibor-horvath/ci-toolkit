@@ -139,16 +139,15 @@ on:
 permissions:
   contents: read
 
-defaults:
-  run:
-    shell: bash
-    working-directory: ${{ inputs.working-directory }}
-
 jobs:
   lint:
     name: Lint
     if: ${{ inputs.lint-script != '' }}
     runs-on: ${{ inputs.runs-on }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
 
@@ -221,6 +220,10 @@ jobs:
     name: Typecheck
     if: ${{ inputs.typecheck-script != '' }}
     runs-on: ${{ inputs.runs-on }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
 
@@ -293,6 +296,10 @@ jobs:
     name: Test${{ inputs.test-shards > 1 && format(' ({0}/{1})', matrix.shard, inputs.test-shards) || '' }}
     if: ${{ inputs.test-script != '' }}
     runs-on: ${{ inputs.runs-on }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
     strategy:
       fail-fast: false
       matrix:
@@ -396,6 +403,10 @@ jobs:
     name: Build
     if: ${{ inputs.build-script != '' }}
     runs-on: ${{ inputs.runs-on }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
     outputs:
       package-manager: ${{ steps.pm.outputs.name }}
     steps:
