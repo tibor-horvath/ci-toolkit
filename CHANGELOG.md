@@ -5,6 +5,13 @@ All notable changes to this project are documented here. The format is based on
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Consumers pin the
 moving major tag `@v1`.
 
+## [1.11.0](https://github.com/tibor-horvath/ci-toolkit/compare/v1.10.0...v1.11.0) (2026-09-30)
+
+
+### Added
+
+* enhance self-check workflows with structural YAML checks and smoke tests ([#32](https://github.com/tibor-horvath/ci-toolkit/issues/32)) ([75a2696](https://github.com/tibor-horvath/ci-toolkit/commit/75a2696e525b225d240315e167ca954d3bd1764a))
+
 ## [1.10.0](https://github.com/tibor-horvath/ci-toolkit/compare/v1.9.0...v1.10.0) (2026-09-30)
 
 
