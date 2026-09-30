@@ -5,6 +5,18 @@ All notable changes to this project are documented here. The format is based on
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Consumers pin the
 moving major tag `@v1`.
 
+## [1.9.0](https://github.com/tibor-horvath/ci-toolkit/compare/v1.8.0...v1.9.0) (2026-09-30)
+
+
+### Added
+
+* add reusable secret scan workflow to detect leaked credentials ([#27](https://github.com/tibor-horvath/ci-toolkit/issues/27)) ([690625f](https://github.com/tibor-horvath/ci-toolkit/commit/690625f9958d420c5e6ed3f70b4f1dc2fb164364))
+
+
+### Documentation
+
+* add badge for author in README ([#25](https://github.com/tibor-horvath/ci-toolkit/issues/25)) ([c1f1774](https://github.com/tibor-horvath/ci-toolkit/commit/c1f17745245d7786ced56ae11c8a357d7a4fadb1))
+
 ## [1.8.0](https://github.com/tibor-horvath/ci-toolkit/compare/v1.7.1...v1.8.0) (2026-08-31)
 
 
