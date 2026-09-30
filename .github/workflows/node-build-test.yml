@@ -1,0 +1,485 @@
+name: Node Build & Test (reusable)
+
+# Reusable, toolchain-agnostic Node pipeline. It drives your package.json
+# scripts rather than any specific tool, so it works for Vite + Vitest, Next,
+# Jest, Webpack, Astro, libraries, and anything else that exposes scripts.
+#
+#   lint ─────┐
+#   typecheck ┼─ independent jobs, run in parallel (separate status checks)
+#   test ─────┤   (1..10 parallel shards via `--shard=i/n`)
+#   build ────┘   (uploads the output dir as an artifact)
+#
+# Each job is switched on by its script input: leave `*-script` empty to skip it.
+# The package manager (npm / pnpm / yarn) is detected from the lockfile, and the
+# dependency store is cached by actions/setup-node keyed on that lockfile.
+#
+# Call it from a consumer repo with:
+#   jobs:
+#     node:
+#       name: Node
+#       uses: tibor-horvath/ci-toolkit/.github/workflows/node-build-test.yml@v1
+#       with: { node-version: '22.x', test-shards: 2, collect-coverage: true }
+#       secrets: inherit
+#       permissions: { contents: read }
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: "Node.js version to install. Ignored when node-version-file is set."
+        type: string
+        default: "22.x"
+      node-version-file:
+        description: "File holding the Node version (e.g. .nvmrc, .node-version, package.json)."
+        type: string
+        default: ""
+      package-manager:
+        description: >-
+          `npm`, `pnpm` or `yarn`. Empty -> detected from the lockfile
+          (pnpm-lock.yaml, yarn.lock, otherwise npm).
+        type: string
+        default: ""
+      pnpm-version:
+        description: >-
+          pnpm version to install. Empty -> read from the `packageManager`
+          field in package.json.
+        type: string
+        default: ""
+      working-directory:
+        description: "Directory containing package.json and the lockfile (monorepo sub-package)."
+        type: string
+        default: "."
+      registry-url:
+        description: "Private registry URL. Pair with the `npm-token` secret."
+        type: string
+        default: ""
+      install-command:
+        description: >-
+          Override the dependency install command. Empty -> a frozen-lockfile
+          install for the detected package manager (npm ci / pnpm install
+          --frozen-lockfile / yarn install --immutable).
+        type: string
+        default: ""
+      lint-script:
+        description: "package.json script to run for linting. Empty skips the lint job."
+        type: string
+        default: "lint"
+      typecheck-script:
+        description: "package.json script for type checking (e.g. `tsc --noEmit`). Empty skips the job."
+        type: string
+        default: "typecheck"
+      test-script:
+        description: "package.json script to run the tests. Empty skips the test job."
+        type: string
+        default: "test"
+      test-args:
+        description: >-
+          Extra arguments appended to the test script (e.g. `--run` for a
+          Vitest `test` script that otherwise starts in watch mode).
+        type: string
+        default: ""
+      test-shards:
+        description: >-
+          Number of parallel test jobs, 1-10. Each runs the test script with
+          `--shard=<i>/<n>`, which Vitest and Jest both support. 1 -> a single,
+          unsharded job.
+        type: number
+        default: 1
+      collect-coverage:
+        description: >-
+          Append `--coverage` to the test script and upload the report. Off by
+          default: it needs a coverage provider installed (e.g.
+          @vitest/coverage-v8), and failing without one would be a surprise.
+        type: boolean
+        default: false
+      coverage-path:
+        description: "Directory (relative to working-directory) holding the coverage report."
+        type: string
+        default: "coverage"
+      build-script:
+        description: "package.json script that produces the build. Empty skips the build job."
+        type: string
+        default: "build"
+      build-output-dir:
+        description: "Build output directory relative to working-directory (`dist` for Vite)."
+        type: string
+        default: "dist"
+      build-env:
+        description: >-
+          Newline-separated KEY=VALUE pairs exported to the build step, for
+          public build-time config such as `VITE_API_URL=...`. Never put
+          secrets here: Vite inlines `VITE_*` values into the shipped bundle.
+        type: string
+        default: ""
+      upload-build-output:
+        description: "Upload the build output directory as an artifact."
+        type: boolean
+        default: true
+      build-artifact-name:
+        description: "Artifact name for the build output."
+        type: string
+        default: "build"
+      artifact-retention-days:
+        description: "Retention for the build and coverage artifacts."
+        type: number
+        default: 7
+      runs-on:
+        description: "Runner label."
+        type: string
+        default: "ubuntu-latest"
+    secrets:
+      npm-token:
+        description: "Auth token for `registry-url` (exposed as NODE_AUTH_TOKEN during install)."
+        required: false
+    outputs:
+      package-manager:
+        description: "The package manager that was used (`npm`, `pnpm` or `yarn`)."
+        value: ${{ jobs.build.outputs.package-manager }}
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+    working-directory: ${{ inputs.working-directory }}
+
+jobs:
+  lint:
+    name: Lint
+    if: ${{ inputs.lint-script != '' }}
+    runs-on: ${{ inputs.runs-on }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+
+      - name: Detect package manager
+        id: pm
+        env:
+          PM_INPUT: ${{ inputs.package-manager }}
+        run: |
+          pm="$PM_INPUT"
+          if [ -z "$pm" ]; then
+            if [ -f pnpm-lock.yaml ]; then pm=pnpm
+            elif [ -f yarn.lock ]; then pm=yarn
+            else pm=npm
+            fi
+          fi
+          case "$pm" in
+            npm)  lock=package-lock.json ;;
+            pnpm) lock=pnpm-lock.yaml ;;
+            yarn) lock=yarn.lock ;;
+            *) echo "::error::package-manager must be npm, pnpm or yarn (got '$pm')"; exit 1 ;;
+          esac
+          echo "name=$pm" >> "$GITHUB_OUTPUT"
+          echo "lockfile=$lock" >> "$GITHUB_OUTPUT"
+
+      - name: Setup pnpm
+        if: ${{ steps.pm.outputs.name == 'pnpm' }}
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: ${{ inputs.pnpm-version }}
+          package_json_file: ${{ inputs.working-directory }}/package.json
+
+      - name: Enable corepack
+        if: ${{ steps.pm.outputs.name == 'yarn' }}
+        run: corepack enable
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ inputs.node-version-file == '' && inputs.node-version || '' }}
+          node-version-file: ${{ inputs.node-version-file != '' && format('{0}/{1}', inputs.working-directory, inputs.node-version-file) || '' }}
+          registry-url: ${{ inputs.registry-url }}
+          cache: ${{ steps.pm.outputs.name }}
+          cache-dependency-path: ${{ inputs.working-directory }}/${{ steps.pm.outputs.lockfile }}
+
+      - name: Install dependencies
+        env:
+          PM: ${{ steps.pm.outputs.name }}
+          INSTALL_COMMAND: ${{ inputs.install-command }}
+          NODE_AUTH_TOKEN: ${{ secrets.npm-token }}
+        run: |
+          if [ -n "$INSTALL_COMMAND" ]; then
+            bash -c "$INSTALL_COMMAND"
+          elif [ "$PM" = "npm" ]; then
+            npm ci
+          elif [ "$PM" = "pnpm" ]; then
+            pnpm install --frozen-lockfile
+          elif [[ "$(yarn --version)" == 1.* ]]; then
+            yarn install --frozen-lockfile
+          else
+            yarn install --immutable
+          fi
+
+      - name: Lint
+        env:
+          PM: ${{ steps.pm.outputs.name }}
+          SCRIPT: ${{ inputs.lint-script }}
+        run: '"$PM" run "$SCRIPT"'
+
+  typecheck:
+    name: Typecheck
+    if: ${{ inputs.typecheck-script != '' }}
+    runs-on: ${{ inputs.runs-on }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+
+      - name: Detect package manager
+        id: pm
+        env:
+          PM_INPUT: ${{ inputs.package-manager }}
+        run: |
+          pm="$PM_INPUT"
+          if [ -z "$pm" ]; then
+            if [ -f pnpm-lock.yaml ]; then pm=pnpm
+            elif [ -f yarn.lock ]; then pm=yarn
+            else pm=npm
+            fi
+          fi
+          case "$pm" in
+            npm)  lock=package-lock.json ;;
+            pnpm) lock=pnpm-lock.yaml ;;
+            yarn) lock=yarn.lock ;;
+            *) echo "::error::package-manager must be npm, pnpm or yarn (got '$pm')"; exit 1 ;;
+          esac
+          echo "name=$pm" >> "$GITHUB_OUTPUT"
+          echo "lockfile=$lock" >> "$GITHUB_OUTPUT"
+
+      - name: Setup pnpm
+        if: ${{ steps.pm.outputs.name == 'pnpm' }}
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: ${{ inputs.pnpm-version }}
+          package_json_file: ${{ inputs.working-directory }}/package.json
+
+      - name: Enable corepack
+        if: ${{ steps.pm.outputs.name == 'yarn' }}
+        run: corepack enable
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ inputs.node-version-file == '' && inputs.node-version || '' }}
+          node-version-file: ${{ inputs.node-version-file != '' && format('{0}/{1}', inputs.working-directory, inputs.node-version-file) || '' }}
+          registry-url: ${{ inputs.registry-url }}
+          cache: ${{ steps.pm.outputs.name }}
+          cache-dependency-path: ${{ inputs.working-directory }}/${{ steps.pm.outputs.lockfile }}
+
+      - name: Install dependencies
+        env:
+          PM: ${{ steps.pm.outputs.name }}
+          INSTALL_COMMAND: ${{ inputs.install-command }}
+          NODE_AUTH_TOKEN: ${{ secrets.npm-token }}
+        run: |
+          if [ -n "$INSTALL_COMMAND" ]; then
+            bash -c "$INSTALL_COMMAND"
+          elif [ "$PM" = "npm" ]; then
+            npm ci
+          elif [ "$PM" = "pnpm" ]; then
+            pnpm install --frozen-lockfile
+          elif [[ "$(yarn --version)" == 1.* ]]; then
+            yarn install --frozen-lockfile
+          else
+            yarn install --immutable
+          fi
+
+      - name: Typecheck
+        env:
+          PM: ${{ steps.pm.outputs.name }}
+          SCRIPT: ${{ inputs.typecheck-script }}
+        run: '"$PM" run "$SCRIPT"'
+
+  test:
+    name: Test${{ inputs.test-shards > 1 && format(' ({0}/{1})', matrix.shard, inputs.test-shards) || '' }}
+    if: ${{ inputs.test-script != '' }}
+    runs-on: ${{ inputs.runs-on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Matrix cannot count, so look the shard list up by size. 1 collapses
+        # to a single unsharded job.
+        shard: ${{ fromJSON('{"1":[1],"2":[1,2],"3":[1,2,3],"4":[1,2,3,4],"5":[1,2,3,4,5],"6":[1,2,3,4,5,6],"7":[1,2,3,4,5,6,7],"8":[1,2,3,4,5,6,7,8],"9":[1,2,3,4,5,6,7,8,9],"10":[1,2,3,4,5,6,7,8,9,10]}')[format('{0}', inputs.test-shards)] }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+
+      - name: Detect package manager
+        id: pm
+        env:
+          PM_INPUT: ${{ inputs.package-manager }}
+        run: |
+          pm="$PM_INPUT"
+          if [ -z "$pm" ]; then
+            if [ -f pnpm-lock.yaml ]; then pm=pnpm
+            elif [ -f yarn.lock ]; then pm=yarn
+            else pm=npm
+            fi
+          fi
+          case "$pm" in
+            npm)  lock=package-lock.json ;;
+            pnpm) lock=pnpm-lock.yaml ;;
+            yarn) lock=yarn.lock ;;
+            *) echo "::error::package-manager must be npm, pnpm or yarn (got '$pm')"; exit 1 ;;
+          esac
+          echo "name=$pm" >> "$GITHUB_OUTPUT"
+          echo "lockfile=$lock" >> "$GITHUB_OUTPUT"
+
+      - name: Setup pnpm
+        if: ${{ steps.pm.outputs.name == 'pnpm' }}
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: ${{ inputs.pnpm-version }}
+          package_json_file: ${{ inputs.working-directory }}/package.json
+
+      - name: Enable corepack
+        if: ${{ steps.pm.outputs.name == 'yarn' }}
+        run: corepack enable
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ inputs.node-version-file == '' && inputs.node-version || '' }}
+          node-version-file: ${{ inputs.node-version-file != '' && format('{0}/{1}', inputs.working-directory, inputs.node-version-file) || '' }}
+          registry-url: ${{ inputs.registry-url }}
+          cache: ${{ steps.pm.outputs.name }}
+          cache-dependency-path: ${{ inputs.working-directory }}/${{ steps.pm.outputs.lockfile }}
+
+      - name: Install dependencies
+        env:
+          PM: ${{ steps.pm.outputs.name }}
+          INSTALL_COMMAND: ${{ inputs.install-command }}
+          NODE_AUTH_TOKEN: ${{ secrets.npm-token }}
+        run: |
+          if [ -n "$INSTALL_COMMAND" ]; then
+            bash -c "$INSTALL_COMMAND"
+          elif [ "$PM" = "npm" ]; then
+            npm ci
+          elif [ "$PM" = "pnpm" ]; then
+            pnpm install --frozen-lockfile
+          elif [[ "$(yarn --version)" == 1.* ]]; then
+            yarn install --frozen-lockfile
+          else
+            yarn install --immutable
+          fi
+
+      - name: Test
+        env:
+          PM: ${{ steps.pm.outputs.name }}
+          SCRIPT: ${{ inputs.test-script }}
+          TEST_ARGS: ${{ inputs.test-args }}
+          SHARDS: ${{ inputs.test-shards }}
+          SHARD: ${{ matrix.shard }}
+          COLLECT: ${{ inputs.collect-coverage }}
+        run: |
+          args=()
+          if [ -n "$TEST_ARGS" ]; then read -r -a extra <<< "$TEST_ARGS"; args+=("${extra[@]}"); fi
+          if [ "$COLLECT" = "true" ]; then args+=(--coverage); fi
+          if [ "$SHARDS" -gt 1 ]; then args+=("--shard=${SHARD}/${SHARDS}"); fi
+
+          # npm needs `--` to forward flags to the script; pnpm and yarn
+          # forward everything after the script name on their own.
+          if [ "$PM" = "npm" ] && [ "${#args[@]}" -gt 0 ]; then
+            args=(-- "${args[@]}")
+          fi
+          echo "$PM run $SCRIPT ${args[*]:-}"
+          "$PM" run "$SCRIPT" "${args[@]}"
+
+      - name: Upload coverage
+        if: ${{ always() && inputs.collect-coverage }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: coverage${{ inputs.test-shards > 1 && format('-{0}', matrix.shard) || '' }}
+          path: ${{ inputs.working-directory }}/${{ inputs.coverage-path }}
+          retention-days: ${{ inputs.artifact-retention-days }}
+          if-no-files-found: ignore
+
+  build:
+    name: Build
+    if: ${{ inputs.build-script != '' }}
+    runs-on: ${{ inputs.runs-on }}
+    outputs:
+      package-manager: ${{ steps.pm.outputs.name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+
+      - name: Detect package manager
+        id: pm
+        env:
+          PM_INPUT: ${{ inputs.package-manager }}
+        run: |
+          pm="$PM_INPUT"
+          if [ -z "$pm" ]; then
+            if [ -f pnpm-lock.yaml ]; then pm=pnpm
+            elif [ -f yarn.lock ]; then pm=yarn
+            else pm=npm
+            fi
+          fi
+          case "$pm" in
+            npm)  lock=package-lock.json ;;
+            pnpm) lock=pnpm-lock.yaml ;;
+            yarn) lock=yarn.lock ;;
+            *) echo "::error::package-manager must be npm, pnpm or yarn (got '$pm')"; exit 1 ;;
+          esac
+          echo "name=$pm" >> "$GITHUB_OUTPUT"
+          echo "lockfile=$lock" >> "$GITHUB_OUTPUT"
+
+      - name: Setup pnpm
+        if: ${{ steps.pm.outputs.name == 'pnpm' }}
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: ${{ inputs.pnpm-version }}
+          package_json_file: ${{ inputs.working-directory }}/package.json
+
+      - name: Enable corepack
+        if: ${{ steps.pm.outputs.name == 'yarn' }}
+        run: corepack enable
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ inputs.node-version-file == '' && inputs.node-version || '' }}
+          node-version-file: ${{ inputs.node-version-file != '' && format('{0}/{1}', inputs.working-directory, inputs.node-version-file) || '' }}
+          registry-url: ${{ inputs.registry-url }}
+          cache: ${{ steps.pm.outputs.name }}
+          cache-dependency-path: ${{ inputs.working-directory }}/${{ steps.pm.outputs.lockfile }}
+
+      - name: Install dependencies
+        env:
+          PM: ${{ steps.pm.outputs.name }}
+          INSTALL_COMMAND: ${{ inputs.install-command }}
+          NODE_AUTH_TOKEN: ${{ secrets.npm-token }}
+        run: |
+          if [ -n "$INSTALL_COMMAND" ]; then
+            bash -c "$INSTALL_COMMAND"
+          elif [ "$PM" = "npm" ]; then
+            npm ci
+          elif [ "$PM" = "pnpm" ]; then
+            pnpm install --frozen-lockfile
+          elif [[ "$(yarn --version)" == 1.* ]]; then
+            yarn install --frozen-lockfile
+          else
+            yarn install --immutable
+          fi
+
+      - name: Build
+        env:
+          PM: ${{ steps.pm.outputs.name }}
+          SCRIPT: ${{ inputs.build-script }}
+          BUILD_ENV: ${{ inputs.build-env }}
+        run: |
+          # Exported in a subshell-free loop so KEY=VALUE pairs reach the
+          # build without being written to GITHUB_ENV (which would leak them
+          # into later steps of this job).
+          while IFS= read -r line; do
+            [ -n "$line" ] || continue
+            export "$line"
+          done <<< "$BUILD_ENV"
+          "$PM" run "$SCRIPT"
+
+      - name: Upload build output
+        if: ${{ inputs.upload-build-output }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ${{ inputs.build-artifact-name }}
+          path: ${{ inputs.working-directory }}/${{ inputs.build-output-dir }}
+          retention-days: ${{ inputs.artifact-retention-days }}
+          if-no-files-found: error

@@ -9,13 +9,31 @@ Pin callers to the moving major tag: **`@v1`**. All third-party actions are SHA-
 
 ## Workflows
 
+### .NET
+
 | Workflow | Purpose | Docs |
 |---|---|---|
 | `dotnet-build-test.yml` | .NET build + test — build-once/test-in-parallel sharding, coverage, trx report | [docs](docs/dotnet-build-test.md) |
-| `docker-publish.yml` | Docker build + push to any registry (Buildx, GHA cache) | [docs](docs/docker-publish.md) |
 | `nuget-publish.yml` | NuGet pack + push (idempotent, `--skip-duplicate`) | [docs](docs/nuget-publish.md) |
-| `actions-consumption.yml` | Report a run's Actions usage (per OS / per job, optional account balance) | [docs](docs/actions-consumption.md) |
+
+### Node / React
+
+| Workflow | Purpose | Docs |
+|---|---|---|
+| `node-build-test.yml` | Node/React lint, typecheck, test (sharded) and build — npm/pnpm/yarn auto-detected, script-driven | [docs](docs/node-build-test.md) |
+
+### Containers
+
+| Workflow | Purpose | Docs |
+|---|---|---|
+| `docker-publish.yml` | Docker build + push to any registry (Buildx, GHA cache) | [docs](docs/docker-publish.md) |
+
+### Any stack
+
+| Workflow | Purpose | Docs |
+|---|---|---|
 | `secret-scan.yml` | Scan commits/PRs for leaked API keys, tokens and connection strings (gitleaks) | [docs](docs/secret-scan.md) |
+| `actions-consumption.yml` | Report a run's Actions usage (per OS / per job, optional account balance) | [docs](docs/actions-consumption.md) |
 | `.github/actions/cache` | Composite action: NuGet + build-output caching with restore-key fallbacks | [docs](docs/caching.md) |
 
 Each doc page lists the workflow's inputs/secrets and copy-paste caller examples.
