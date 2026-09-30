@@ -180,6 +180,8 @@ jobs:
         run: |
           while IFS= read -r line; do
             [ -n "$line" ] || continue
+            # Each line is a whole KEY=VALUE pair, which is what export takes.
+            # shellcheck disable=SC2163
             export "$line"
           done <<< "$BUILD_ENV"
           "$PM" run "$SCRIPT"
