@@ -1,0 +1,110 @@
+name: Smart dependency cache
+description: >-
+  NuGet package cache plus an optional build-output cache, with restore-key
+  fallbacks and a restore-only mode so parallel jobs never race to save.
+
+# Composite action — call it after `actions/checkout` and `actions/setup-dotnet`:
+#
+#   - uses: tibor-horvath/ci-toolkit/.github/actions/cache@v1
+#
+# Both caches use the same two-tier key scheme:
+#
+#   exact key    <os>-<prefix>-<hash of dependency manifests>
+#   restore key  <os>-<prefix>-                (newest cache of any manifest state)
+#
+# An exact hit skips the save entirely. A fallback hit restores a *near*
+# cache, the restore/build only fetches the delta, and the changed manifest
+# state is saved under its own exact key for next time.
+
+inputs:
+  nuget:
+    description: "Cache ~/.nuget/packages."
+    default: "true"
+  nuget-key-files:
+    description: >-
+      Newline-separated globs hashed into the NuGet key. Anything that can
+      change the resolved package set belongs here.
+    default: |
+      **/*.csproj
+      **/*.fsproj
+      **/*.vbproj
+      **/Directory.Packages.props
+      **/Directory.Build.props
+      **/packages.lock.json
+      **/nuget.config
+      global.json
+  restore-only:
+    description: >-
+      Restore but never save. Use in fan-out jobs (test shards, matrix legs)
+      that run after a job that already saved — avoids N identical uploads and
+      "unable to reserve cache" noise.
+    default: "false"
+  build-paths:
+    description: >-
+      Newline-separated paths for an additional build-output cache (e.g.
+      `node_modules/.cache`, `.next/cache`, `**/obj`). Empty disables it.
+      See docs/caching.md for when this pays off.
+    default: ""
+  build-key-files:
+    description: "Newline-separated globs hashed into the build-output key."
+    default: ""
+  build-key-prefix:
+    description: "Name segment for the build-output key; change it to bust the cache."
+    default: "build"
+  cache-version:
+    description: "Bump to invalidate every cache this action manages."
+    default: "v1"
+
+outputs:
+  nuget-cache-hit:
+    description: "'true' on an exact NuGet key match."
+    value: ${{ steps.nuget-save.outputs.cache-hit || steps.nuget-restore.outputs.cache-hit }}
+  build-cache-hit:
+    description: "'true' on an exact build-output key match."
+    value: ${{ steps.build-save.outputs.cache-hit || steps.build-restore.outputs.cache-hit }}
+
+runs:
+  using: composite
+  steps:
+    - name: Restore + save NuGet cache
+      id: nuget-save
+      if: ${{ inputs.nuget == 'true' && inputs.restore-only != 'true' }}
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ inputs.cache-version }}-${{ hashFiles(inputs.nuget-key-files) }}
+        restore-keys: ${{ runner.os }}-nuget-${{ inputs.cache-version }}-
+
+    - name: Restore NuGet cache
+      id: nuget-restore
+      if: ${{ inputs.nuget == 'true' && inputs.restore-only == 'true' }}
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ inputs.cache-version }}-${{ hashFiles(inputs.nuget-key-files) }}
+        restore-keys: ${{ runner.os }}-nuget-${{ inputs.cache-version }}-
+
+    # The build key ends in the commit SHA so every run saves a fresh snapshot
+    # (immutable caches can't be overwritten), and the restore key prefix pulls
+    # the most recent one for the same manifest state, then any state.
+    - name: Restore + save build-output cache
+      id: build-save
+      if: ${{ inputs.build-paths != '' && inputs.restore-only != 'true' }}
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ inputs.build-paths }}
+        key: ${{ runner.os }}-${{ inputs.build-key-prefix }}-${{ inputs.cache-version }}-${{ hashFiles(inputs.build-key-files) }}-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-${{ inputs.build-key-prefix }}-${{ inputs.cache-version }}-${{ hashFiles(inputs.build-key-files) }}-
+          ${{ runner.os }}-${{ inputs.build-key-prefix }}-${{ inputs.cache-version }}-
+
+    - name: Restore build-output cache
+      id: build-restore
+      if: ${{ inputs.build-paths != '' && inputs.restore-only == 'true' }}
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ inputs.build-paths }}
+        key: ${{ runner.os }}-${{ inputs.build-key-prefix }}-${{ inputs.cache-version }}-${{ hashFiles(inputs.build-key-files) }}-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-${{ inputs.build-key-prefix }}-${{ inputs.cache-version }}-${{ hashFiles(inputs.build-key-files) }}-
+          ${{ runner.os }}-${{ inputs.build-key-prefix }}-${{ inputs.cache-version }}-
