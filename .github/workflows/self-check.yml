@@ -70,6 +70,13 @@ jobs:
       - name: Lint workflows
         run: ./actionlint -color
 
+  # Dogfoods the toolkit's own reusable workflow on this repo's commits.
+  secret-scan:
+    name: Secret scan
+    uses: ./.github/workflows/secret-scan.yml
+    permissions:
+      contents: read
+
   pinned-actions:
     name: Actions are SHA-pinned
     runs-on: ubuntu-latest
