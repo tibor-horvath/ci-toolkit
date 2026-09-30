@@ -5,6 +5,13 @@ All notable changes to this project are documented here. The format is based on
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Consumers pin the
 moving major tag `@v1`.
 
+## [1.10.0](https://github.com/tibor-horvath/ci-toolkit/compare/v1.9.0...v1.10.0) (2026-09-30)
+
+
+### Added
+
+* implement smart dependency caching for NuGet packages and build outputs ([#28](https://github.com/tibor-horvath/ci-toolkit/issues/28)) ([844cc1b](https://github.com/tibor-horvath/ci-toolkit/commit/844cc1b45e24366014875cbde401316664476ebe))
+
 ## [1.9.0](https://github.com/tibor-horvath/ci-toolkit/compare/v1.8.0...v1.9.0) (2026-09-30)
 
 
