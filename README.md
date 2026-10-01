@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/logo/logo.svg" width="96" alt="ci-toolkit logo"></p>
+
 # ci-toolkit
 
 [![Built by Tibor Horváth](https://tiborhorvath.dev/badge/built-by-compact.svg)](https://tiborhorvath.dev)
