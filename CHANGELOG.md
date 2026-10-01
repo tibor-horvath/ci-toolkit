@@ -5,6 +5,18 @@ All notable changes to this project are documented here. The format is based on
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Consumers pin the
 moving major tag `@v1`.
 
+## [1.15.0](https://github.com/tibor-horvath/ci-toolkit/compare/v1.14.0...v1.15.0) (2026-10-01)
+
+
+### Added
+
+* add .NET coverage comment workflow and documentation ([#42](https://github.com/tibor-horvath/ci-toolkit/issues/42)) ([3ffe4cb](https://github.com/tibor-horvath/ci-toolkit/commit/3ffe4cbb6fbfb8ecb5d892bc5854a09f933ab9e8))
+
+
+### Fixed
+
+* update cache action version to v1.14.0 in workflows ([14e15da](https://github.com/tibor-horvath/ci-toolkit/commit/14e15dacaa666b96c55c5731be59cac926bb3eb6))
+
 ## [1.14.0](https://github.com/tibor-horvath/ci-toolkit/compare/v1.13.1...v1.14.0) (2026-10-01)
 
 
