@@ -13,6 +13,13 @@ permissions:
   contents: write
   pull-requests: write
 
+# Queue, never cancel: stopping mid-run could leave a tag without a release or
+# a `v1` tag that was not moved. release-please works from the tip of `main`, so
+# if several merges pile up, only the newest queued run needs to execute.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   # `@v1` is a moving tag, so never release a commit that fails its own checks.
   self-check:

@@ -99,6 +99,13 @@ on:
         description: "Job timeout in minutes (applies to every job in this workflow)."
         type: number
         default: 60
+      cancel-superseded:
+        description: >-
+          Cancel an in-flight run of this workflow when a newer one starts for
+          the same pull request. Only pull_request events are ever cancelled;
+          push, schedule and release runs always complete.
+        type: boolean
+        default: true
     secrets:
       npm-token:
         description: "Optional registry auth token, exposed as NODE_AUTH_TOKEN during install."
@@ -106,6 +113,12 @@ on:
 
 permissions:
   contents: read
+
+# Supersede an in-flight run for the same pull request. The group is prefixed
+# with this workflow's name so it cannot collide with the caller's own group.
+concurrency:
+  group: ${{ github.workflow }}-lighthouse-ci-${{ inputs.working-directory }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ inputs.cancel-superseded && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') }}
 
 jobs:
   lighthouse:

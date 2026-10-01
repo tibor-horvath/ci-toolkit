@@ -14,6 +14,7 @@ languages that need a build (Java, C/C++).
 | `queries` | `security-extended` | `default`, `security-extended` or `security-and-quality` |
 | `runs-on` | `ubuntu-latest` | Runner label |
 | `timeout-minutes` | `60` | Job timeout in minutes |
+| `cancel-superseded` | `true` | Cancel an in-flight run when a newer one starts for the same pull request. PR events only; see [Cancel superseded runs](../README.md#cancel-superseded-runs) |
 
 No secrets required. Private repos need GitHub Code Security enabled for the
 results upload.

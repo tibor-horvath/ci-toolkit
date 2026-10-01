@@ -15,6 +15,7 @@ from the lockfile alone, so there is no install and no dependency cache: one fas
 | `working-directory` | `.` | Folder with `package.json` and the lockfile |
 | `runs-on` | `ubuntu-latest` | Runner label |
 | `timeout-minutes` | `15` | Job timeout in minutes |
+| `cancel-superseded` | `true` | Cancel an in-flight run when a newer one starts for the same pull request. PR events only; see [Cancel superseded runs](../README.md#cancel-superseded-runs) |
 
 Needs only `permissions: { contents: read }`.
 

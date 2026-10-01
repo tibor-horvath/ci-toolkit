@@ -73,20 +73,32 @@ jobs:
 
 ## Cancel superseded runs
 
-A reusable workflow cannot cancel its caller's earlier runs; the `concurrency:`
-group belongs to the calling workflow. Without it, every push to a PR branch
-keeps the previous run going and burns minutes. Add this to your caller:
+The CI-style workflows (`node-build-test`, `dotnet-build-test`, `lighthouse-ci`,
+`bundle-size`, `codeql`, `dependency-review`, `secret-scan`, `node-audit`,
+`dotnet-vulnerable-packages`, `workflow-lint`, `pr-title-lint`) cancel their own
+in-flight run when a newer one starts for the same pull request, so a push to a
+PR branch no longer leaves the previous run burning minutes. You don't need to
+do anything.
+
+- Only `pull_request` / `pull_request_target` runs are cancelled. Runs on
+  `main`, schedules and releases always complete.
+- Each workflow's group is prefixed with its own name, so it never collides with
+  a `concurrency:` group in your calling workflow.
+- Opt out per call with `cancel-superseded: false`.
+- Calling the same workflow twice in one run with identical inputs (same
+  `working-directory` / `project`) would make the calls cancel each other. Give
+  them different directories or projects, or set `cancel-superseded: false`.
+
+The publish workflows (`nuget-publish`, `docker-publish`) deliberately don't do
+this: cancelling mid-push can leave a half-published package or image. To
+cancel superseded runs across your whole caller workflow, or to queue publishes,
+add a `concurrency:` block to the caller:
 
 ```yaml
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 ```
-
-Cancelling only on `pull_request` keeps runs on `main` (and any release or
-publish run) from being cut short by the next merge. Heavy workflows such as
-`node-build-test`, `dotnet-build-test`, `lighthouse-ci` and `bundle-size` gain
-the most.
 
 ## Versioning & releases
 

@@ -29,6 +29,7 @@ lockfile and the dependency store is cached. All third-party actions are SHA-pin
 | `artifact-retention-days` | `7` | Retention for build and coverage artifacts |
 | `runs-on` | `ubuntu-latest` | Runner label |
 | `timeout-minutes` | `60` | Job timeout in minutes |
+| `cancel-superseded` | `true` | Cancel an in-flight run when a newer one starts for the same pull request. PR events only; see [Cancel superseded runs](../README.md#cancel-superseded-runs) |
 
 | Secret | Purpose |
 |---|---|
@@ -106,7 +107,8 @@ jobs:
 
 ## Notes
 
-- **Cancel superseded runs.** Set `concurrency:` in your calling workflow; see
+- **Cancel superseded runs.** Built in: a newer push to the same PR cancels the
+  in-flight run. Opt out with `cancel-superseded: false`; see
   [Cancel superseded runs](../README.md#cancel-superseded-runs).
 - **Coverage needs a provider.** `collect-coverage` adds `--coverage`, which fails
   without e.g. `@vitest/coverage-v8` installed. That is why it is off by default.

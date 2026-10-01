@@ -17,6 +17,7 @@ Maven, Docker, Actions, …). On non-PR events the job is skipped.
 | `comment-summary` | `on-failure` | PR comment with the findings: `never`, `on-failure`, `always` |
 | `runs-on` | `ubuntu-latest` | Runner label |
 | `timeout-minutes` | `15` | Job timeout in minutes |
+| `cancel-superseded` | `true` | Cancel an in-flight run when a newer one starts for the same pull request. PR events only; see [Cancel superseded runs](../README.md#cancel-superseded-runs) |
 
 No secrets required. Private repos need GitHub Code Security.
 

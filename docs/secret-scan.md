@@ -17,6 +17,7 @@ history instead. Matches are printed redacted.
 | `gitleaks-version` | `8.28.0` | gitleaks release to install |
 | `runs-on` | `ubuntu-latest` | Runner label (Linux x64) |
 | `timeout-minutes` | `30` | Job timeout in minutes |
+| `cancel-superseded` | `true` | Cancel an in-flight run when a newer one starts for the same pull request. PR events only; see [Cancel superseded runs](../README.md#cancel-superseded-runs) |
 
 No secrets required. The CLI is used rather than `gitleaks-action`, which needs a
 paid licence key for organisation-owned repos.
