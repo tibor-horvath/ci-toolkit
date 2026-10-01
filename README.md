@@ -16,6 +16,7 @@ Pin callers to the moving major tag: **`@v1`**. All third-party actions are SHA-
 | `dotnet-build-test.yml` | .NET build + test — build-once/test-in-parallel sharding, coverage, trx report | [docs](docs/dotnet-build-test.md) |
 | `nuget-publish.yml` | NuGet pack + push (idempotent, `--skip-duplicate`) | [docs](docs/nuget-publish.md) |
 | `dotnet-vulnerable-packages.yml` | NuGet vulnerability check, direct + transitive, fails on findings | [docs](docs/dotnet-vulnerable-packages.md) |
+| `dotnet-coverage-comment.yml` | Sticky PR comment with the merged code-coverage summary from `dotnet-build-test` | [docs](docs/dotnet-coverage-comment.md) |
 
 ### Node / React
 
@@ -75,8 +76,8 @@ jobs:
 
 The CI-style workflows (`node-build-test`, `dotnet-build-test`, `lighthouse-ci`,
 `bundle-size`, `codeql`, `dependency-review`, `secret-scan`, `node-audit`,
-`dotnet-vulnerable-packages`, `workflow-lint`, `pr-title-lint`) cancel their own
-in-flight run when a newer one starts for the same pull request, so a push to a
+`dotnet-vulnerable-packages`, `dotnet-coverage-comment`, `workflow-lint`,
+`pr-title-lint`) cancel their own in-flight run when a newer one starts for the same pull request, so a push to a
 PR branch no longer leaves the previous run burning minutes. You don't need to
 do anything.
 
