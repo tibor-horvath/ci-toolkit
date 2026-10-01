@@ -127,6 +127,10 @@ on:
         description: "Runner label."
         type: string
         default: "ubuntu-latest"
+      timeout-minutes:
+        description: "Job timeout in minutes (applies to every job in this workflow)."
+        type: number
+        default: 60
     secrets:
       npm-token:
         description: "Auth token for `registry-url` (exposed as NODE_AUTH_TOKEN during install)."
@@ -144,7 +148,7 @@ jobs:
     name: Lint
     if: ${{ inputs.lint-script != '' }}
     runs-on: ${{ inputs.runs-on }}
-    timeout-minutes: 15
+    timeout-minutes: ${{ inputs.timeout-minutes }}
     defaults:
       run:
         shell: bash
@@ -223,7 +227,7 @@ jobs:
     name: Typecheck
     if: ${{ inputs.typecheck-script != '' }}
     runs-on: ${{ inputs.runs-on }}
-    timeout-minutes: 15
+    timeout-minutes: ${{ inputs.timeout-minutes }}
     defaults:
       run:
         shell: bash
@@ -302,7 +306,7 @@ jobs:
     name: Test${{ inputs.test-shards > 1 && format(' ({0}/{1})', matrix.shard, inputs.test-shards) || '' }}
     if: ${{ inputs.test-script != '' }}
     runs-on: ${{ inputs.runs-on }}
-    timeout-minutes: 60
+    timeout-minutes: ${{ inputs.timeout-minutes }}
     defaults:
       run:
         shell: bash
@@ -412,7 +416,7 @@ jobs:
     name: Build
     if: ${{ inputs.build-script != '' }}
     runs-on: ${{ inputs.runs-on }}
-    timeout-minutes: 60
+    timeout-minutes: ${{ inputs.timeout-minutes }}
     defaults:
       run:
         shell: bash

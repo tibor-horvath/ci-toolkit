@@ -52,6 +52,10 @@ on:
         description: "Runner label."
         type: string
         default: "ubuntu-latest"
+      timeout-minutes:
+        description: "Job timeout in minutes (applies to every job in this workflow)."
+        type: number
+        default: 60
     outputs:
       version:
         description: >-
@@ -74,7 +78,7 @@ jobs:
   publish:
     name: NuGet Publish
     runs-on: ${{ inputs.runs-on }}
-    timeout-minutes: 60
+    timeout-minutes: ${{ inputs.timeout-minutes }}
     outputs:
       version: ${{ steps.pack.outputs.version }}
       packages: ${{ steps.pack.outputs.packages }}

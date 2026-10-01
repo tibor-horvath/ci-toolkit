@@ -22,6 +22,7 @@ fails if a category score falls below your minimum. Reports are kept as a workfl
 | `install-command` | `''` | Override the dependency install |
 | `artifact-retention-days` | `7` | Retention for the report artifact |
 | `runs-on` | `ubuntu-latest` | Runner label |
+| `timeout-minutes` | `60` | Job timeout in minutes |
 
 | Secret | Purpose |
 |---|---|

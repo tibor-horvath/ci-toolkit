@@ -71,6 +71,10 @@ on:
         description: "Runner label."
         type: string
         default: "ubuntu-latest"
+      timeout-minutes:
+        description: "Job timeout in minutes (applies to every job in this workflow, except the totals job, fixed at 15)."
+        type: number
+        default: 60
     outputs:
       # All empty unless `test-summary` is enabled — a skipped job contributes
       # empty strings rather than failing the caller's expression.
@@ -98,7 +102,7 @@ jobs:
   build:
     name: Build
     runs-on: ${{ inputs.runs-on }}
-    timeout-minutes: 60
+    timeout-minutes: ${{ inputs.timeout-minutes }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
         with:
@@ -143,7 +147,7 @@ jobs:
     if: ${{ inputs.run-tests }}
     needs: build
     runs-on: ${{ inputs.runs-on }}
-    timeout-minutes: 60
+    timeout-minutes: ${{ inputs.timeout-minutes }}
     strategy:
       fail-fast: false
       matrix:

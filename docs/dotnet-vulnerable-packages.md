@@ -15,6 +15,7 @@ the job also fails: a "clean" report from a failed lookup is not trustworthy.
 | `include-transitive` | `true` | Also check transitive dependencies |
 | `fail-on-findings` | `true` | `false` makes it advisory: findings are logged, the job passes |
 | `runs-on` | `ubuntu-latest` | Runner label |
+| `timeout-minutes` | `15` | Job timeout in minutes |
 
 No secrets required.
 

@@ -16,6 +16,7 @@ history instead. Matches are printed redacted.
 | `scan-full-history` | `false` | Scan every reachable commit, not just the event's range |
 | `gitleaks-version` | `8.28.0` | gitleaks release to install |
 | `runs-on` | `ubuntu-latest` | Runner label (Linux x64) |
+| `timeout-minutes` | `30` | Job timeout in minutes |
 
 No secrets required. The CLI is used rather than `gitleaks-action`, which needs a
 paid licence key for organisation-owned repos.

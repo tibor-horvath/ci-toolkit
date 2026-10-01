@@ -28,6 +28,7 @@ lockfile and the dependency store is cached. All third-party actions are SHA-pin
 | `build-artifact-name` | `build` | Artifact name |
 | `artifact-retention-days` | `7` | Retention for build and coverage artifacts |
 | `runs-on` | `ubuntu-latest` | Runner label |
+| `timeout-minutes` | `60` | Job timeout in minutes |
 
 | Secret | Purpose |
 |---|---|

@@ -57,6 +57,10 @@ on:
         description: "Runner label."
         type: string
         default: "ubuntu-latest"
+      timeout-minutes:
+        description: "Job timeout in minutes (applies to every job in this workflow)."
+        type: number
+        default: 15
 
 permissions:
   contents: read
@@ -65,7 +69,7 @@ jobs:
   audit:
     name: Audit
     runs-on: ${{ inputs.runs-on }}
-    timeout-minutes: 15
+    timeout-minutes: ${{ inputs.timeout-minutes }}
     defaults:
       run:
         shell: bash

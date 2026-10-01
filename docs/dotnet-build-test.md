@@ -15,6 +15,7 @@ artifact). All third-party actions are SHA-pinned; NuGet packages are cached.
 | `collect-coverage` | `true` | Collect `XPlat Code Coverage` and upload as an artifact |
 | `test-summary` | `false` | Sum the trx counters into workflow outputs. Adds one job — see [Outputs](#outputs) |
 | `runs-on` | `ubuntu-latest` | Runner label |
+| `timeout-minutes` | `60` | Job timeout in minutes |
 
 The calling job must grant `permissions: { checks: write, contents: read }` (for the
 test-reporter check) and pass `secrets: inherit` if private dependencies need auth.

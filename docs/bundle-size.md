@@ -18,6 +18,7 @@ script writes to `build-output-dir`, so it works with any bundler, not only Vite
 | `working-directory` | `.` | Folder with `package.json` and the lockfile |
 | `install-command` | `''` | Override the dependency install |
 | `runs-on` | `ubuntu-latest` | Runner label |
+| `timeout-minutes` | `60` | Job timeout in minutes |
 
 | Secret | Purpose |
 |---|---|

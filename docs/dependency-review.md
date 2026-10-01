@@ -16,6 +16,7 @@ Maven, Docker, Actions, …). On non-PR events the job is skipped.
 | `allow-licenses` | `''` | Comma-separated SPDX allowlist; cannot be combined with `deny-licenses` |
 | `comment-summary` | `on-failure` | PR comment with the findings: `never`, `on-failure`, `always` |
 | `runs-on` | `ubuntu-latest` | Runner label |
+| `timeout-minutes` | `15` | Job timeout in minutes |
 
 No secrets required. Private repos need GitHub Code Security.
 
