@@ -71,6 +71,23 @@ jobs:
       contents: read
 ```
 
+## Cancel superseded runs
+
+A reusable workflow cannot cancel its caller's earlier runs; the `concurrency:`
+group belongs to the calling workflow. Without it, every push to a PR branch
+keeps the previous run going and burns minutes. Add this to your caller:
+
+```yaml
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+```
+
+Cancelling only on `pull_request` keeps runs on `main` (and any release or
+publish run) from being cut short by the next merge. Heavy workflows such as
+`node-build-test`, `dotnet-build-test`, `lighthouse-ci` and `bundle-size` gain
+the most.
+
 ## Versioning & releases
 
 Consumers pin the moving major tag `@v1`. Releases are automated with

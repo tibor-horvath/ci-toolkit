@@ -95,6 +95,11 @@ name — that is GitHub's rendering, not something this workflow sets.
 These strings are the status-check names branch protection matches on, so
 renaming the calling job means updating the required checks in that repo.
 
+## Concurrency
+
+Set `concurrency:` in your calling workflow so a new push cancels the superseded run;
+see [Cancel superseded runs](../README.md#cancel-superseded-runs).
+
 ## Examples
 
 **Build + sharded tests:**

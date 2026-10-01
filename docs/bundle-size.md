@@ -50,6 +50,8 @@ jobs:
 
 ## Notes
 
+- **Cancel superseded runs.** Set `concurrency:` in your calling workflow; see
+  [Cancel superseded runs](../README.md#cancel-superseded-runs).
 - **It builds twice.** The base commit is built from scratch each run, so this job costs
   roughly two builds. Run it on PRs only, and expect it to be the slowest of the quality
   jobs. The base is installed separately, so a lockfile change in the PR is measured fairly.

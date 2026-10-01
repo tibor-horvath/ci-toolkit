@@ -105,6 +105,8 @@ jobs:
 
 ## Notes
 
+- **Cancel superseded runs.** Set `concurrency:` in your calling workflow; see
+  [Cancel superseded runs](../README.md#cancel-superseded-runs).
 - **Coverage needs a provider.** `collect-coverage` adds `--coverage`, which fails
   without e.g. `@vitest/coverage-v8` installed. That is why it is off by default.
 - **`build-env` is not for secrets.** Vite inlines `VITE_*` values into the bundle, so
