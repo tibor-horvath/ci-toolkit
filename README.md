@@ -45,6 +45,7 @@ Pin callers to the moving major tag: **`@v1`**. All third-party actions are SHA-
 | `stale.yml` | Label and close inactive issues and PRs | [docs](docs/stale.md) |
 | `actions-consumption.yml` | Report a run's Actions usage (per OS / per job, optional account balance) | [docs](docs/actions-consumption.md) |
 | `.github/actions/cache` | Composite action: NuGet + build-output caching with restore-key fallbacks | [docs](docs/caching.md) |
+| `.github/actions/node-setup` | Composite action: package-manager detection, pnpm/corepack, Node + dependency cache, frozen install | [docs](docs/node-setup.md) |
 
 Each doc page lists the workflow's inputs/secrets and copy-paste caller examples.
 
@@ -69,6 +70,23 @@ jobs:
       checks: write
       contents: read
 ```
+
+## Cancel superseded runs
+
+A reusable workflow cannot cancel its caller's earlier runs; the `concurrency:`
+group belongs to the calling workflow. Without it, every push to a PR branch
+keeps the previous run going and burns minutes. Add this to your caller:
+
+```yaml
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+```
+
+Cancelling only on `pull_request` keeps runs on `main` (and any release or
+publish run) from being cut short by the next merge. Heavy workflows such as
+`node-build-test`, `dotnet-build-test`, `lighthouse-ci` and `bundle-size` gain
+the most.
 
 ## Versioning & releases
 

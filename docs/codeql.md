@@ -13,6 +13,7 @@ languages that need a build (Java, C/C++).
 | `build-mode` | `none` | `none`, `autobuild` or `manual` |
 | `queries` | `security-extended` | `default`, `security-extended` or `security-and-quality` |
 | `runs-on` | `ubuntu-latest` | Runner label |
+| `timeout-minutes` | `60` | Job timeout in minutes |
 
 No secrets required. Private repos need GitHub Code Security enabled for the
 results upload.

@@ -14,6 +14,7 @@ from the lockfile alone, so there is no install and no dependency cache: one fas
 | `node-version` / `node-version-file` | `22.x` / `''` | Node version |
 | `working-directory` | `.` | Folder with `package.json` and the lockfile |
 | `runs-on` | `ubuntu-latest` | Runner label |
+| `timeout-minutes` | `15` | Job timeout in minutes |
 
 Needs only `permissions: { contents: read }`.
 

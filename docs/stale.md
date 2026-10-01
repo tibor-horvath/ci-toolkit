@@ -15,6 +15,7 @@ milestone or an assignee are left alone, and any new comment resets the clock.
 | `only-labels` | `''` | Only consider items with these labels. Empty → all |
 | `dry-run` | `false` | Log what would change without acting |
 | `runs-on` | `ubuntu-latest` | Runner label |
+| `timeout-minutes` | `15` | Job timeout in minutes |
 
 No secrets required.
 

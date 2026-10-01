@@ -95,6 +95,10 @@ on:
         description: "Runner label."
         type: string
         default: "ubuntu-latest"
+      timeout-minutes:
+        description: "Job timeout in minutes (applies to every job in this workflow)."
+        type: number
+        default: 60
     secrets:
       npm-token:
         description: "Optional registry auth token, exposed as NODE_AUTH_TOKEN during install."
@@ -107,12 +111,15 @@ jobs:
   lighthouse:
     name: Lighthouse
     runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
     defaults:
       run:
         shell: bash
         working-directory: ${{ inputs.working-directory }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          persist-credentials: false
 
       - name: Detect package manager
         id: pm

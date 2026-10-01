@@ -15,6 +15,7 @@ platform. It's a close estimate, not the invoiced figure.
 | `run-id` | current run | Run to report on. Pass `github.event.workflow_run.id` |
 | `included-minutes` | `0` | Plan's monthly minutes (e.g. `2000` Free, `3000` Pro) → shows "remaining". `0` = used/cost only |
 | `runs-on` | `ubuntu-latest` | Runner label |
+| `timeout-minutes` | `15` | Job timeout in minutes |
 
 **Optional account usage.** Pass a `billing_token` secret to add an account-level
 Actions usage section (per-SKU minutes + net cost) from GitHub's enhanced billing

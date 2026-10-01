@@ -13,6 +13,7 @@ registry.
 | `push` | `true` | Push (set `false` to build-only, e.g. PRs) |
 | `build-args` | `''` | Newline-separated `KEY=VALUE` build args |
 | `runs-on` | `ubuntu-latest` | Runner label |
+| `timeout-minutes` | `60` | Job timeout in minutes |
 
 This workflow declares **no permissions of its own** — it inherits the caller job's
 token. So each caller grants what its registry needs: **GHCR** → `packages: write`

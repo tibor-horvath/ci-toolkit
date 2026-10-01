@@ -14,6 +14,7 @@ toolkit runs on itself in `self-check.yml`.
 | `shellcheck-opts` | `''` | Passed to shellcheck via `SHELLCHECK_OPTS` (e.g. `-e SC2153`) |
 | `require-pinned-actions` | `true` | Fail on unpinned third-party `uses:` |
 | `runs-on` | `ubuntu-latest` | Runner label (Linux x64) |
+| `timeout-minutes` | `15` | Job timeout in minutes |
 
 No secrets required. The actionlint download is verified against the release's
 checksums file.

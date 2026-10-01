@@ -12,6 +12,7 @@ choose the version bump — a malformed title means a missed or wrong release.
 | `require-scope` | `false` | Fail when the title has no `(scope)` |
 | `subject-pattern` | `''` | Regex the subject must match. Empty → any |
 | `runs-on` | `ubuntu-latest` | Runner label |
+| `timeout-minutes` | `15` | Job timeout in minutes |
 
 No secrets required (the workflow's own token is used, read-only).
 

@@ -22,6 +22,7 @@ fails if a category score falls below your minimum. Reports are kept as a workfl
 | `install-command` | `''` | Override the dependency install |
 | `artifact-retention-days` | `7` | Retention for the report artifact |
 | `runs-on` | `ubuntu-latest` | Runner label |
+| `timeout-minutes` | `60` | Job timeout in minutes |
 
 | Secret | Purpose |
 |---|---|
@@ -65,6 +66,8 @@ Budgets or per-audit rules need a config file:
 
 ## Notes
 
+- **Cancel superseded runs.** Set `concurrency:` in your calling workflow; see
+  [Cancel superseded runs](../README.md#cancel-superseded-runs).
 - **Reports stay private.** The upload target is forced to the local filesystem, even with
   your own config. Lighthouse's `temporary-public-storage` would publish the report at a
   public URL, which is wrong for a private repo. Download the `lighthouse-reports` artifact

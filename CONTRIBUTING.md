@@ -53,10 +53,10 @@ smoke job's `with:` so the new path is exercised.
 ## Versions that are bumped by hand
 
 Dependabot does not track versions held in `env:` or `run:` steps. Update these
-manually in `self-check.yml`:
+manually:
 
-- `ACTIONLINT_VERSION`
-- `yamllint==…` and `pyyaml==…` in the `yamllint` and `docs-consistency` jobs
+- the `actionlint-version` default in `workflow-lint.yml` (`self-check.yml` uses it)
+- in `self-check.yml`: `yamllint==…` and `pyyaml==…` in the `yamllint` and `docs-consistency` jobs
 
 ## Dependabot PRs
 

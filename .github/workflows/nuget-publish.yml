@@ -52,6 +52,10 @@ on:
         description: "Runner label."
         type: string
         default: "ubuntu-latest"
+      timeout-minutes:
+        description: "Job timeout in minutes (applies to every job in this workflow)."
+        type: number
+        default: 60
     outputs:
       version:
         description: >-
@@ -74,11 +78,14 @@ jobs:
   publish:
     name: NuGet Publish
     runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
     outputs:
       version: ${{ steps.pack.outputs.version }}
       packages: ${{ steps.pack.outputs.packages }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
@@ -86,11 +93,7 @@ jobs:
           dotnet-version: ${{ inputs.dotnet-version }}
 
       - name: Cache NuGet packages
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-v1-${{ hashFiles('**/*.csproj', '**/*.fsproj', '**/*.vbproj', '**/Directory.Packages.props', '**/Directory.Build.props', '**/packages.lock.json', '**/nuget.config', 'global.json') }}
-          restore-keys: ${{ runner.os }}-nuget-v1-
+        uses: tibor-horvath/ci-toolkit/.github/actions/cache@v1
 
       - name: Pack
         id: pack

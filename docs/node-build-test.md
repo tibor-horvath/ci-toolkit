@@ -28,6 +28,7 @@ lockfile and the dependency store is cached. All third-party actions are SHA-pin
 | `build-artifact-name` | `build` | Artifact name |
 | `artifact-retention-days` | `7` | Retention for build and coverage artifacts |
 | `runs-on` | `ubuntu-latest` | Runner label |
+| `timeout-minutes` | `60` | Job timeout in minutes |
 
 | Secret | Purpose |
 |---|---|
@@ -105,6 +106,8 @@ jobs:
 
 ## Notes
 
+- **Cancel superseded runs.** Set `concurrency:` in your calling workflow; see
+  [Cancel superseded runs](../README.md#cancel-superseded-runs).
 - **Coverage needs a provider.** `collect-coverage` adds `--coverage`, which fails
   without e.g. `@vitest/coverage-v8` installed. That is why it is off by default.
 - **`build-env` is not for secrets.** Vite inlines `VITE_*` values into the bundle, so

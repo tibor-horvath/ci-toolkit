@@ -15,6 +15,7 @@ artifact). All third-party actions are SHA-pinned; NuGet packages are cached.
 | `collect-coverage` | `true` | Collect `XPlat Code Coverage` and upload as an artifact |
 | `test-summary` | `false` | Sum the trx counters into workflow outputs. Adds one job — see [Outputs](#outputs) |
 | `runs-on` | `ubuntu-latest` | Runner label |
+| `timeout-minutes` | `60` | Job timeout in minutes |
 
 The calling job must grant `permissions: { checks: write, contents: read }` (for the
 test-reporter check) and pass `secrets: inherit` if private dependencies need auth.
@@ -94,6 +95,11 @@ name — that is GitHub's rendering, not something this workflow sets.
 
 These strings are the status-check names branch protection matches on, so
 renaming the calling job means updating the required checks in that repo.
+
+## Concurrency
+
+Set `concurrency:` in your calling workflow so a new push cancels the superseded run;
+see [Cancel superseded runs](../README.md#cancel-superseded-runs).
 
 ## Examples
 

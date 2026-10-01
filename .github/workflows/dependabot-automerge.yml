@@ -29,6 +29,7 @@ jobs:
   automerge:
     name: Automerge minor and patch
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # `github.actor` is the account that triggered this run; a human pushing to
     # a Dependabot branch changes it, so a modified PR is not merged unseen.
     if: github.event.pull_request.user.login == 'dependabot[bot]' && github.actor == 'dependabot[bot]'

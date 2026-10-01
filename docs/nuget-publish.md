@@ -13,6 +13,7 @@ Reusable NuGet pack + push. Packs once and pushes every resulting package with
 | `nuget-source` | nuget.org | Feed to push to |
 | `include-symbols` | `false` | Also pack + push `.snupkg` |
 | `runs-on` | `ubuntu-latest` | Runner label |
+| `timeout-minutes` | `60` | Job timeout in minutes |
 
 Requires the `nuget-api-key` secret. Typically triggered on `release: published`.
 

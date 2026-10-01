@@ -25,50 +25,25 @@ concurrency:
   group: self-check-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  # Bump manually — dependabot does not track versions held in env vars.
-  ACTIONLINT_VERSION: "1.7.7"
-
+jobs:
   # SC2153 reads `$FOO` as a probable misspelling of a nearby `foo` local.
   # In workflow scripts the uppercase names come from the step's `env:` block,
   # which shellcheck never sees — actionlint hands it the script body alone —
   # so the check has no signal here and fires only false positives. A leading
   # `# shellcheck disable` comment does not cover this: without a shebang it
   # binds to the next command, not the script, so it would need repeating at
-  # every assignment. shellcheck reads this variable from its own environment.
-  SHELLCHECK_OPTS: "-e SC2153"
-
-jobs:
+  # every assignment. workflow-lint passes `shellcheck-opts` through to
+  # shellcheck as SHELLCHECK_OPTS.
   actionlint:
     name: actionlint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
-
-      - name: Install actionlint
-        shell: bash
-        # Downloaded from the pinned release tag and verified against the
-        # checksums file published with it. That protects against a truncated or
-        # corrupted download; it is not a defence against a compromised release,
-        # since both files come from the same origin.
-        run: |
-          set -euo pipefail
-          base="https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}"
-          tarball="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
-          sums="actionlint_${ACTIONLINT_VERSION}_checksums.txt"
-          curl -fsSL --retry 3 -O "${base}/${tarball}"
-          curl -fsSL --retry 3 -O "${base}/${sums}"
-          sha256sum --ignore-missing -c "${sums}"
-          tar -xzf "${tarball}" actionlint
-          ./actionlint --version
-
-      - name: Show shellcheck version
-        # actionlint shells out to shellcheck for `run:` blocks and silently
-        # skips that analysis if the binary is missing, so assert it is here.
-        run: shellcheck --version
-
-      - name: Lint workflows
-        run: ./actionlint -color
+    uses: ./.github/workflows/workflow-lint.yml
+    with:
+      shellcheck-opts: "-e SC2153"
+      # SHA pinning has its own job below, which also allows this repo's own
+      # `tibor-horvath/ci-toolkit/*` references.
+      require-pinned-actions: false
+    permissions:
+      contents: read
 
   # Dogfoods the toolkit's own reusable workflow on this repo's commits.
   secret-scan:
@@ -83,8 +58,11 @@ jobs:
   yamllint:
     name: yamllint
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          persist-credentials: false
 
       - name: Install yamllint
         # Bump manually — dependabot does not track versions held in run steps.
@@ -98,8 +76,11 @@ jobs:
   docs-consistency:
     name: Docs match workflow interfaces
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          persist-credentials: false
 
       - name: Check README and docs/
         run: |
@@ -127,6 +108,35 @@ jobs:
     permissions:
       contents: read
 
+  # Local path: self-check runs against this checkout, so it exercises the PR's
+  # version of the composite action (consumers reference it by tag instead).
+  smoke-node-setup:
+    name: Smoke - node-setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        id: node
+        uses: ./.github/actions/node-setup
+        with:
+          working-directory: tests/fixtures/node-app
+
+      - name: Verify detection and install
+        shell: bash
+        env:
+          PM: ${{ steps.node.outputs.package-manager }}
+          LOCKFILE: ${{ steps.node.outputs.lockfile }}
+        run: |
+          test "$PM" = "npm"
+          test "$LOCKFILE" = "package-lock.json"
+          cd tests/fixtures/node-app && npm run lint
+
   smoke-dotnet-build-test:
     name: Smoke - dotnet-build-test
     uses: ./.github/workflows/dotnet-build-test.yml
@@ -152,8 +162,11 @@ jobs:
   explicit-permissions:
     name: Workflows declare permissions
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          persist-credentials: false
 
       - name: Check every workflow declares `permissions:`
         shell: bash
@@ -177,8 +190,11 @@ jobs:
   pinned-actions:
     name: Actions are SHA-pinned
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          persist-credentials: false
 
       - name: Check every `uses:` resolves to a full commit SHA
         shell: bash
