@@ -16,6 +16,7 @@ artifact). All third-party actions are SHA-pinned; NuGet packages are cached.
 | `test-summary` | `false` | Sum the trx counters into workflow outputs. Adds one job — see [Outputs](#outputs) |
 | `runs-on` | `ubuntu-latest` | Runner label |
 | `timeout-minutes` | `60` | Job timeout in minutes |
+| `cancel-superseded` | `true` | Cancel an in-flight run when a newer one starts for the same pull request. PR events only; see [Cancel superseded runs](../README.md#cancel-superseded-runs) |
 
 The calling job must grant `permissions: { checks: write, contents: read }` (for the
 test-reporter check) and pass `secrets: inherit` if private dependencies need auth.
@@ -98,8 +99,9 @@ renaming the calling job means updating the required checks in that repo.
 
 ## Concurrency
 
-Set `concurrency:` in your calling workflow so a new push cancels the superseded run;
-see [Cancel superseded runs](../README.md#cancel-superseded-runs).
+A newer push to the same pull request cancels the in-flight run. This is built in
+and can be turned off with `cancel-superseded: false`; see
+[Cancel superseded runs](../README.md#cancel-superseded-runs).
 
 ## Examples
 

@@ -13,6 +13,7 @@ choose the version bump — a malformed title means a missed or wrong release.
 | `subject-pattern` | `''` | Regex the subject must match. Empty → any |
 | `runs-on` | `ubuntu-latest` | Runner label |
 | `timeout-minutes` | `15` | Job timeout in minutes |
+| `cancel-superseded` | `true` | Cancel an in-flight run when a newer one starts for the same pull request. PR events only; see [Cancel superseded runs](../README.md#cancel-superseded-runs) |
 
 No secrets required (the workflow's own token is used, read-only).
 

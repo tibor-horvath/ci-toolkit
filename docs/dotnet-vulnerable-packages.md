@@ -16,6 +16,7 @@ the job also fails: a "clean" report from a failed lookup is not trustworthy.
 | `fail-on-findings` | `true` | `false` makes it advisory: findings are logged, the job passes |
 | `runs-on` | `ubuntu-latest` | Runner label |
 | `timeout-minutes` | `15` | Job timeout in minutes |
+| `cancel-superseded` | `true` | Cancel an in-flight run when a newer one starts for the same pull request. PR events only; see [Cancel superseded runs](../README.md#cancel-superseded-runs) |
 
 No secrets required.
 

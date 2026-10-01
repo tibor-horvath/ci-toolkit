@@ -23,6 +23,7 @@ fails if a category score falls below your minimum. Reports are kept as a workfl
 | `artifact-retention-days` | `7` | Retention for the report artifact |
 | `runs-on` | `ubuntu-latest` | Runner label |
 | `timeout-minutes` | `60` | Job timeout in minutes |
+| `cancel-superseded` | `true` | Cancel an in-flight run when a newer one starts for the same pull request. PR events only; see [Cancel superseded runs](../README.md#cancel-superseded-runs) |
 
 | Secret | Purpose |
 |---|---|
@@ -66,7 +67,8 @@ Budgets or per-audit rules need a config file:
 
 ## Notes
 
-- **Cancel superseded runs.** Set `concurrency:` in your calling workflow; see
+- **Cancel superseded runs.** Built in: a newer push to the same PR cancels the
+  in-flight run. Opt out with `cancel-superseded: false`; see
   [Cancel superseded runs](../README.md#cancel-superseded-runs).
 - **Reports stay private.** The upload target is forced to the local filesystem, even with
   your own config. Lighthouse's `temporary-public-storage` would publish the report at a
