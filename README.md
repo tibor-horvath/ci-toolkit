@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/logo/logo.svg" width="96" alt="ci-toolkit logo"></p>
+<p align="center"><img src="docs/social-preview.png" alt="ci-toolkit — reusable GitHub Actions workflows for building, testing, and shipping projects"></p>
 
 # ci-toolkit
 
