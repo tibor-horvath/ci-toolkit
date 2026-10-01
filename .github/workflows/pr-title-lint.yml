@@ -1,0 +1,59 @@
+name: PR Title Lint (reusable)
+
+# Requires pull request titles to follow Conventional Commits. With squash
+# merges the PR title becomes the commit message, so this is what release-please
+# (and any changelog tooling) reads to pick the version bump — a bad title means
+# a missed release or a wrong one.
+#
+# The action reads only the title from the event payload and never checks out or
+# runs PR code, so `pull_request_target` is safe here and works for fork PRs too.
+#
+# Call it from a consumer repo with:
+#   on:
+#     pull_request_target:
+#       types: [opened, edited, synchronize, reopened]
+#   jobs:
+#     title:
+#       uses: tibor-horvath/ci-toolkit/.github/workflows/pr-title-lint.yml@v1
+#       permissions: { pull-requests: read }
+
+on:
+  workflow_call:
+    inputs:
+      types:
+        description: "Newline-separated allowed types. Empty -> the Conventional Commits defaults (feat, fix, docs, chore, ...)."
+        type: string
+        default: ""
+      scopes:
+        description: "Newline-separated allowed scopes. Empty -> any scope."
+        type: string
+        default: ""
+      require-scope:
+        description: "Fail when the title has no `(scope)`."
+        type: boolean
+        default: false
+      subject-pattern:
+        description: "Regex the subject (text after `type:`) must match. Empty -> any."
+        type: string
+        default: ""
+      runs-on:
+        description: "Runner label."
+        type: string
+        default: "ubuntu-latest"
+
+permissions:
+  pull-requests: read
+
+jobs:
+  lint:
+    name: PR title
+    runs-on: ${{ inputs.runs-on }}
+    steps:
+      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          types: ${{ inputs.types }}
+          scopes: ${{ inputs.scopes }}
+          requireScope: ${{ inputs.require-scope }}
+          subjectPattern: ${{ inputs.subject-pattern }}

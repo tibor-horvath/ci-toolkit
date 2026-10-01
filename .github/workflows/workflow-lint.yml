@@ -1,0 +1,108 @@
+name: Workflow Lint (reusable)
+
+# Lints a repo's own GitHub Actions workflows — the same guard this toolkit runs
+# on itself in `self-check.yml`, packaged for consumers.
+#
+#   * actionlint validates workflow syntax, expressions, `needs`/`if` references
+#     and matrix shapes, and pipes every `run:` block through shellcheck.
+#   * The pin check fails any `uses:` that is not a full 40-character commit SHA
+#     (a tag or branch can be moved by the action's owner; a SHA cannot).
+#
+# Call it from a consumer repo with:
+#   on:
+#     pull_request: { paths: ['.github/**'] }
+#   jobs:
+#     lint:
+#       uses: tibor-horvath/ci-toolkit/.github/workflows/workflow-lint.yml@v1
+#       permissions: { contents: read }
+
+on:
+  workflow_call:
+    inputs:
+      actionlint-version:
+        description: "actionlint release to install (without the leading `v`)."
+        type: string
+        default: "1.7.7"
+      shellcheck-opts:
+        description: "Options passed to shellcheck via SHELLCHECK_OPTS (e.g. `-e SC2153`)."
+        type: string
+        default: ""
+      require-pinned-actions:
+        description: "Fail when a third-party `uses:` is not pinned to a full commit SHA."
+        type: boolean
+        default: true
+      runs-on:
+        description: "Runner label (must be Linux x64)."
+        type: string
+        default: "ubuntu-latest"
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Workflow lint
+    runs-on: ${{ inputs.runs-on }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+
+      - name: Install actionlint
+        shell: bash
+        env:
+          VERSION: ${{ inputs.actionlint-version }}
+        # Verified against the checksums file published with the release. That
+        # catches a truncated or corrupted download; it is not a defence against
+        # a compromised release, since both files share an origin.
+        run: |
+          set -euo pipefail
+          base="https://github.com/rhysd/actionlint/releases/download/v${VERSION}"
+          tarball="actionlint_${VERSION}_linux_amd64.tar.gz"
+          sums="actionlint_${VERSION}_checksums.txt"
+          curl -fsSL --retry 3 -O "${base}/${tarball}"
+          curl -fsSL --retry 3 -O "${base}/${sums}"
+          sha256sum --ignore-missing -c "${sums}"
+          tar -xzf "${tarball}" actionlint
+          ./actionlint --version
+
+      - name: Lint workflows
+        shell: bash
+        env:
+          SHELLCHECK_OPTS: ${{ inputs.shellcheck-opts }}
+        run: ./actionlint -color
+
+      - name: Check actions are SHA-pinned
+        if: inputs.require-pinned-actions
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Workflows and composite actions. Only real `uses:` keys match — a
+          # leading `#` (caller examples in header comments) does not.
+          grep -rnE '^[[:space:]]*-?[[:space:]]*uses:' .github 2>/dev/null \
+            | grep -E '\.ya?ml:' > uses.txt || true
+
+          fail=0
+          while IFS= read -r hit; do
+            [ -n "$hit" ] || continue
+            file="${hit%%:*}"
+            rest="${hit#*:}"
+            line="${rest%%:*}"
+            ref=$(printf '%s' "$hit" \
+              | sed -E 's/.*uses:[[:space:]]*//; s/[[:space:]]+#.*$//' \
+              | tr -d '[:space:]')
+
+            case "$ref" in
+              # Local actions and workflows are versioned with the repo itself.
+              ./*|docker://*) continue ;;
+            esac
+
+            if printf '%s' "$ref" | grep -qE '@[0-9a-f]{40}$'; then
+              echo "  ok  ${ref}"
+            else
+              echo "::error file=${file},line=${line}::action is not SHA-pinned: ${ref}"
+              fail=1
+            fi
+          done < uses.txt
+
+          rm -f uses.txt
+          exit "$fail"
