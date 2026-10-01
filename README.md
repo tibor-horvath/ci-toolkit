@@ -45,6 +45,7 @@ Pin callers to the moving major tag: **`@v1`**. All third-party actions are SHA-
 | `stale.yml` | Label and close inactive issues and PRs | [docs](docs/stale.md) |
 | `actions-consumption.yml` | Report a run's Actions usage (per OS / per job, optional account balance) | [docs](docs/actions-consumption.md) |
 | `.github/actions/cache` | Composite action: NuGet + build-output caching with restore-key fallbacks | [docs](docs/caching.md) |
+| `.github/actions/node-setup` | Composite action: package-manager detection, pnpm/corepack, Node + dependency cache, frozen install | [docs](docs/node-setup.md) |
 
 Each doc page lists the workflow's inputs/secrets and copy-paste caller examples.
 

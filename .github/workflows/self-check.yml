@@ -127,6 +127,32 @@ jobs:
     permissions:
       contents: read
 
+  # Local path: self-check runs against this checkout, so it exercises the PR's
+  # version of the composite action (consumers reference it by tag instead).
+  smoke-node-setup:
+    name: Smoke - node-setup
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+
+      - name: Set up Node
+        id: node
+        uses: ./.github/actions/node-setup
+        with:
+          working-directory: tests/fixtures/node-app
+
+      - name: Verify detection and install
+        shell: bash
+        env:
+          PM: ${{ steps.node.outputs.package-manager }}
+          LOCKFILE: ${{ steps.node.outputs.lockfile }}
+        run: |
+          test "$PM" = "npm"
+          test "$LOCKFILE" = "package-lock.json"
+          cd tests/fixtures/node-app && npm run lint
+
   smoke-dotnet-build-test:
     name: Smoke - dotnet-build-test
     uses: ./.github/workflows/dotnet-build-test.yml

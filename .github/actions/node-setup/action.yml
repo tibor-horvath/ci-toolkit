@@ -1,0 +1,127 @@
+name: Node setup
+description: >-
+  Detect the package manager, set up pnpm/corepack and Node (with the
+  dependency cache), and optionally install dependencies.
+
+# Composite action — call it right after `actions/checkout`:
+#
+#   - uses: tibor-horvath/ci-toolkit/.github/actions/node-setup@v1
+#     with:
+#       working-directory: web
+#       npm-token: ${{ secrets.npm-token }}
+#
+# Replaces the detect → pnpm → corepack → setup-node → install block that the
+# Node workflows used to repeat in every job.
+
+inputs:
+  working-directory:
+    description: "Directory holding package.json and the lockfile, relative to the workspace."
+    default: "."
+  package-manager:
+    description: "`npm`, `pnpm` or `yarn`. Empty detects it from the lockfile."
+    default: ""
+  pnpm-version:
+    description: "pnpm version. Empty reads `packageManager` from package.json."
+    default: ""
+  node-version:
+    description: "Node version (ignored when `node-version-file` is set)."
+    default: "22.x"
+  node-version-file:
+    description: "Version file (e.g. `.nvmrc`), relative to `working-directory`."
+    default: ""
+  registry-url:
+    description: "Registry URL; writes an .npmrc that reads NODE_AUTH_TOKEN."
+    default: ""
+  cache:
+    description: "Cache the package manager's store via setup-node (`true`/`false`)."
+    default: "true"
+  install:
+    description: "Install dependencies (`true`/`false`)."
+    default: "true"
+  install-command:
+    description: "Custom install command. Empty uses the frozen-lockfile install for the package manager."
+    default: ""
+  npm-token:
+    description: "Auth token for `registry-url`, exposed as NODE_AUTH_TOKEN during install."
+    default: ""
+  workspace-prefix:
+    description: >-
+      Prefix for paths handed to other actions (version file, lockfile, package.json),
+      for jobs that check out into a subfolder (e.g. `head/`). Include the trailing slash.
+    default: ""
+
+outputs:
+  package-manager:
+    description: "The package manager in use (`npm`, `pnpm` or `yarn`)."
+    value: ${{ steps.pm.outputs.name }}
+  lockfile:
+    description: "Lockfile name for that package manager."
+    value: ${{ steps.pm.outputs.lockfile }}
+
+runs:
+  using: composite
+  steps:
+    - name: Detect package manager
+      id: pm
+      shell: bash
+      working-directory: ${{ inputs.workspace-prefix }}${{ inputs.working-directory }}
+      env:
+        PM_INPUT: ${{ inputs.package-manager }}
+      run: |
+        pm="$PM_INPUT"
+        if [ -z "$pm" ]; then
+          if [ -f pnpm-lock.yaml ]; then pm=pnpm
+          elif [ -f yarn.lock ]; then pm=yarn
+          else pm=npm
+          fi
+        fi
+        case "$pm" in
+          npm)  lock=package-lock.json ;;
+          pnpm) lock=pnpm-lock.yaml ;;
+          yarn) lock=yarn.lock ;;
+          *) echo "::error::package-manager must be npm, pnpm or yarn (got '$pm')"; exit 1 ;;
+        esac
+        echo "name=$pm" >> "$GITHUB_OUTPUT"
+        echo "lockfile=$lock" >> "$GITHUB_OUTPUT"
+
+    - name: Setup pnpm
+      if: ${{ steps.pm.outputs.name == 'pnpm' }}
+      uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      with:
+        version: ${{ inputs.pnpm-version }}
+        package_json_file: ${{ inputs.workspace-prefix }}${{ inputs.working-directory }}/package.json
+
+    - name: Enable corepack
+      if: ${{ steps.pm.outputs.name == 'yarn' }}
+      shell: bash
+      run: corepack enable
+
+    - name: Setup Node
+      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      with:
+        node-version: ${{ inputs.node-version-file == '' && inputs.node-version || '' }}
+        node-version-file: ${{ inputs.node-version-file != '' && format('{0}{1}/{2}', inputs.workspace-prefix, inputs.working-directory, inputs.node-version-file) || '' }}
+        registry-url: ${{ inputs.registry-url }}
+        cache: ${{ inputs.cache == 'true' && steps.pm.outputs.name || '' }}
+        cache-dependency-path: ${{ inputs.workspace-prefix }}${{ inputs.working-directory }}/${{ steps.pm.outputs.lockfile }}
+
+    - name: Install dependencies
+      if: ${{ inputs.install == 'true' }}
+      shell: bash
+      working-directory: ${{ inputs.workspace-prefix }}${{ inputs.working-directory }}
+      env:
+        PM: ${{ steps.pm.outputs.name }}
+        INSTALL_COMMAND: ${{ inputs.install-command }}
+        NODE_AUTH_TOKEN: ${{ inputs.npm-token }}
+      run: |
+        if [ -n "$INSTALL_COMMAND" ]; then
+          bash -c "$INSTALL_COMMAND"
+        elif [ "$PM" = "npm" ]; then
+          npm ci
+        elif [ "$PM" = "pnpm" ]; then
+          pnpm install --frozen-lockfile
+        elif [[ "$(yarn --version)" == 1.* ]]; then
+          yarn install --frozen-lockfile
+        else
+          yarn install --immutable
+        fi
