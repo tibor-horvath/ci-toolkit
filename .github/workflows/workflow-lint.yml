@@ -67,6 +67,12 @@ jobs:
           tar -xzf "${tarball}" actionlint
           ./actionlint --version
 
+      - name: Show shellcheck version
+        # actionlint shells out to shellcheck for `run:` blocks and silently
+        # skips that analysis if the binary is missing, so assert it is here.
+        shell: bash
+        run: shellcheck --version
+
       - name: Lint workflows
         shell: bash
         env:
