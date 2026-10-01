@@ -110,11 +110,7 @@ jobs:
           dotnet-version: ${{ inputs.dotnet-version }}
 
       - name: Cache NuGet packages
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-v1-${{ hashFiles('**/*.csproj', '**/*.fsproj', '**/*.vbproj', '**/Directory.Packages.props', '**/Directory.Build.props', '**/packages.lock.json', '**/nuget.config', 'global.json') }}
-          restore-keys: ${{ runner.os }}-nuget-v1-
+        uses: tibor-horvath/ci-toolkit/.github/actions/cache@v1
 
       - name: Restore
         run: dotnet restore ${{ inputs.build-project }}
@@ -167,11 +163,9 @@ jobs:
       # MSBuild targets/props that packages contribute, without a download.
       # Restore-only: the build job owns the save, so shards never upload dupes.
       - name: Restore NuGet cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: tibor-horvath/ci-toolkit/.github/actions/cache@v1
         with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-v1-${{ hashFiles('**/*.csproj', '**/*.fsproj', '**/*.vbproj', '**/Directory.Packages.props', '**/Directory.Build.props', '**/packages.lock.json', '**/nuget.config', 'global.json') }}
-          restore-keys: ${{ runner.os }}-nuget-v1-
+          restore-only: "true"
 
       - name: Download build output
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
