@@ -1,0 +1,70 @@
+name: CodeQL (reusable)
+
+# Static analysis (SAST) with GitHub CodeQL. One job per language, results go to
+# the repo's Code scanning alerts.
+#
+# Defaults to `build-mode: none`, which analyses C# and JavaScript/TypeScript
+# straight from source — no restore, no build, no SDK to install. Use
+# `autobuild` or `manual` only for languages that need a build (Java, C/C++).
+#
+# New alerts appear without any change in your code (the query packs are
+# updated), so run it on a schedule as well as on pushes and PRs:
+#   on:
+#     push: { branches: [main] }
+#     pull_request:
+#     schedule: [{ cron: '0 6 * * 1' }]
+#   jobs:
+#     codeql:
+#       uses: tibor-horvath/ci-toolkit/.github/workflows/codeql.yml@v1
+#       with: { languages: '["csharp","javascript-typescript"]' }
+#       permissions: { contents: read, security-events: write, actions: read }
+#
+# Private repos need GitHub Code Security enabled for the upload to succeed.
+
+on:
+  workflow_call:
+    inputs:
+      languages:
+        description: >-
+          JSON array of CodeQL languages, one analysis job each
+          (e.g. '["csharp","javascript-typescript"]').
+        type: string
+        default: '["javascript-typescript"]'
+      build-mode:
+        description: "`none`, `autobuild` or `manual`. `none` suits C# and JS/TS."
+        type: string
+        default: "none"
+      queries:
+        description: "Query suite: `default`, `security-extended` or `security-and-quality`."
+        type: string
+        default: "security-extended"
+      runs-on:
+        description: "Runner label."
+        type: string
+        default: "ubuntu-latest"
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  analyze:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ${{ inputs.runs-on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ${{ fromJSON(inputs.languages) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+
+      - uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ inputs.build-mode }}
+          queries: ${{ inputs.queries }}
+
+      - uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          category: "/language:${{ matrix.language }}"

@@ -137,6 +137,14 @@ jobs:
       checks: write
       contents: read
 
+  smoke-dotnet-vulnerable-packages:
+    name: Smoke - dotnet-vulnerable-packages
+    uses: ./.github/workflows/dotnet-vulnerable-packages.yml
+    with:
+      project: tests/fixtures/dotnet-app/Fixture.slnx
+    permissions:
+      contents: read
+
   # A reusable workflow with no `permissions:` inherits the caller's default
   # token scope, which is often read-write. Require every workflow to declare
   # its own, or opt out deliberately with `# self-check: inherit-permissions`

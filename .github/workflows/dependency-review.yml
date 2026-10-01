@@ -1,0 +1,64 @@
+name: Dependency Review (reusable)
+
+# Blocks a pull request that adds or bumps a dependency to a version with a known
+# vulnerability, or to one under a disallowed licence. It looks only at what the
+# PR changes, so existing debt does not fail unrelated PRs — pair it with
+# `node-audit.yml` / `dotnet-vulnerable-packages.yml` on a schedule for that.
+#
+# Works for every ecosystem the GitHub dependency graph supports (npm, NuGet,
+# pip, Maven, Docker, Actions, ...). Pull requests only; on other events the job
+# is skipped.
+#
+# Private repos need GitHub Code Security (the dependency review API).
+#
+# Call it from a consumer repo with:
+#   on: { pull_request: }
+#   jobs:
+#     deps:
+#       uses: tibor-horvath/ci-toolkit/.github/workflows/dependency-review.yml@v1
+#       permissions: { contents: read, pull-requests: write }
+
+on:
+  workflow_call:
+    inputs:
+      fail-on-severity:
+        description: "Lowest severity that fails the job: `low`, `moderate`, `high` or `critical`."
+        type: string
+        default: "high"
+      deny-licenses:
+        description: "Comma-separated SPDX licences to reject (e.g. `GPL-3.0-only, AGPL-3.0-only`). Empty -> none."
+        type: string
+        default: ""
+      allow-licenses:
+        description: >-
+          Comma-separated SPDX allowlist; anything else fails. Cannot be
+          combined with deny-licenses. Empty -> no allowlist.
+        type: string
+        default: ""
+      comment-summary:
+        description: "PR comment with the findings: `never`, `on-failure` or `always`."
+        type: string
+        default: "on-failure"
+      runs-on:
+        description: "Runner label."
+        type: string
+        default: "ubuntu-latest"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    name: Dependency review
+    if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
+    runs-on: ${{ inputs.runs-on }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: ${{ inputs.fail-on-severity }}
+          deny-licenses: ${{ inputs.deny-licenses }}
+          allow-licenses: ${{ inputs.allow-licenses }}
+          comment-summary-in-pr: ${{ inputs.comment-summary }}

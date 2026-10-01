@@ -15,7 +15,7 @@ every PR must pass it.
 | `explicit-permissions` | A workflow has no `permissions:` block |
 | `docs-consistency` | A reusable workflow is missing from the README, has no `docs/<name>.md`, or that page omits an input, secret or output |
 | `secret-scan` | gitleaks finds a leaked secret (this runs the toolkit's own reusable workflow) |
-| `smoke-*` | `node-build-test`, `node-audit` or `dotnet-build-test` fails when run for real against the fixtures |
+| `smoke-*` | `node-build-test`, `node-audit`, `dotnet-build-test` or `dotnet-vulnerable-packages` fails when run for real against the fixtures |
 
 ## Adding or changing a reusable workflow
 

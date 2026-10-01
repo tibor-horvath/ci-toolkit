@@ -1,0 +1,82 @@
+name: Stale Issues & PRs (reusable)
+
+# Labels issues and pull requests that have had no activity, then closes them if
+# there is still none. Anything with an exempt label, a milestone or an assignee
+# is left alone, and any new comment resets the clock.
+#
+# Needs a schedule trigger in the caller:
+#   on:
+#     schedule: [{ cron: '0 3 * * *' }]
+#     workflow_dispatch:
+#   jobs:
+#     stale:
+#       uses: tibor-horvath/ci-toolkit/.github/workflows/stale.yml@v1
+#       permissions: { issues: write, pull-requests: write }
+
+on:
+  workflow_call:
+    inputs:
+      days-before-stale:
+        description: "Days of inactivity before the stale label is added."
+        type: number
+        default: 60
+      days-before-close:
+        description: "Further days after labelling before closing. -1 never closes."
+        type: number
+        default: 14
+      exempt-labels:
+        description: "Comma-separated labels that exempt an issue or PR from staleness."
+        type: string
+        default: "pinned,security,keep-open"
+      stale-label:
+        description: "Label added to stale items."
+        type: string
+        default: "stale"
+      stale-message:
+        description: "Comment posted when an item is marked stale."
+        type: string
+        default: >-
+          This has had no activity for a while and will be closed soon.
+          Comment or remove the stale label to keep it open.
+      close-message:
+        description: "Comment posted when a stale item is closed."
+        type: string
+        default: "Closed due to inactivity. Reopen it if it is still relevant."
+      only-labels:
+        description: "Comma-separated labels an item must have to be considered. Empty -> all items."
+        type: string
+        default: ""
+      dry-run:
+        description: "Log what would change without labelling, commenting or closing."
+        type: boolean
+        default: false
+      runs-on:
+        description: "Runner label."
+        type: string
+        default: "ubuntu-latest"
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    name: Stale
+    runs-on: ${{ inputs.runs-on }}
+    steps:
+      - uses: actions/stale@4391f3da665fdf50b6810c1a66712fb9ba21aa93 # v11.0.0
+        with:
+          days-before-stale: ${{ inputs.days-before-stale }}
+          days-before-close: ${{ inputs.days-before-close }}
+          exempt-issue-labels: ${{ inputs.exempt-labels }}
+          exempt-pr-labels: ${{ inputs.exempt-labels }}
+          stale-issue-label: ${{ inputs.stale-label }}
+          stale-pr-label: ${{ inputs.stale-label }}
+          stale-issue-message: ${{ inputs.stale-message }}
+          stale-pr-message: ${{ inputs.stale-message }}
+          close-issue-message: ${{ inputs.close-message }}
+          close-pr-message: ${{ inputs.close-message }}
+          only-labels: ${{ inputs.only-labels }}
+          exempt-all-milestones: true
+          exempt-all-assignees: true
+          debug-only: ${{ inputs.dry-run }}

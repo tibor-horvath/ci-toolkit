@@ -1,0 +1,100 @@
+name: .NET Vulnerable Packages (reusable)
+
+# Checks every NuGet package — direct and transitive — against the GitHub /
+# NuGet advisory database with `dotnet list package --vulnerable`. The .NET
+# counterpart of `node-audit.yml`.
+#
+# `dotnet list package` always exits 0, even when it finds something, so the
+# job parses its report and fails on the result itself.
+#
+# Advisories appear without any change in your code, so a PR-only trigger
+# misses them. Call this on a schedule as well as on PRs:
+#   on:
+#     pull_request:
+#     schedule: [{ cron: '0 6 * * 1' }]
+#   jobs:
+#     vulnerable:
+#       uses: tibor-horvath/ci-toolkit/.github/workflows/dotnet-vulnerable-packages.yml@v1
+#       permissions: { contents: read }
+
+on:
+  workflow_call:
+    inputs:
+      dotnet-version:
+        description: ".NET SDK version to install."
+        type: string
+        default: "10.0.x"
+      project:
+        description: >-
+          Solution or project to check. Empty -> let the SDK auto-discover the
+          single .sln/.slnx in the repo root.
+        type: string
+        default: ""
+      include-transitive:
+        description: "Also check transitive dependencies, where most advisories hide."
+        type: boolean
+        default: true
+      fail-on-findings:
+        description: "Fail the job on findings. False makes it advisory: findings are logged, the job passes."
+        type: boolean
+        default: true
+      runs-on:
+        description: "Runner label."
+        type: string
+        default: "ubuntu-latest"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Vulnerable packages
+    runs-on: ${{ inputs.runs-on }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
+      - name: Restore
+        env:
+          PROJECT: ${{ inputs.project }}
+        # The vulnerability report reads the restored assets file.
+        run: dotnet restore ${PROJECT:+"$PROJECT"}
+
+      - name: Check for vulnerable packages
+        env:
+          PROJECT: ${{ inputs.project }}
+          TRANSITIVE: ${{ inputs.include-transitive }}
+          FAIL: ${{ inputs.fail-on-findings }}
+        run: |
+          set -euo pipefail
+
+          args=(list)
+          [ -n "$PROJECT" ] && args+=("$PROJECT")
+          args+=(package --vulnerable)
+          [ "$TRANSITIVE" = "true" ] && args+=(--include-transitive)
+
+          # `tee` keeps the report in the log while we also search it.
+          dotnet "${args[@]}" | tee report.txt
+
+          # A source that cannot be reached means a "clean" report is not
+          # trustworthy, so treat that as a failure rather than a pass.
+          if grep -qE 'error NU1900|Unable to load the service index' report.txt; then
+            echo "::error::Could not query the vulnerability database; the result is not reliable"
+            exit 1
+          fi
+
+          if grep -q 'has the following vulnerable packages' report.txt; then
+            if [ "$FAIL" = "true" ]; then
+              echo "::error::Vulnerable NuGet packages found (see the report above)"
+              exit 1
+            fi
+            echo "::warning::Vulnerable NuGet packages found (advisory: fail-on-findings is false)"
+          else
+            echo "No vulnerable packages."
+          fi
