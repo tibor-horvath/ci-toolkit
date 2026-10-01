@@ -5,6 +5,13 @@ All notable changes to this project are documented here. The format is based on
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Consumers pin the
 moving major tag `@v1`.
 
+## [1.12.0](https://github.com/tibor-horvath/ci-toolkit/compare/v1.11.0...v1.12.0) (2026-10-01)
+
+
+### Added
+
+* add CodeQL, dependency review, PR title lint, workflow lint, stale and NuGet vulnerability workflows ([#34](https://github.com/tibor-horvath/ci-toolkit/issues/34)) ([866b715](https://github.com/tibor-horvath/ci-toolkit/commit/866b715f469cc1f9242bd65c6c2f0775badfabfd))
+
 ## [1.11.0](https://github.com/tibor-horvath/ci-toolkit/compare/v1.10.0...v1.11.0) (2026-09-30)
 
 
