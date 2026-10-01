@@ -144,12 +144,15 @@ jobs:
     name: Lint
     if: ${{ inputs.lint-script != '' }}
     runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 15
     defaults:
       run:
         shell: bash
         working-directory: ${{ inputs.working-directory }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          persist-credentials: false
 
       - name: Detect package manager
         id: pm
@@ -220,12 +223,15 @@ jobs:
     name: Typecheck
     if: ${{ inputs.typecheck-script != '' }}
     runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 15
     defaults:
       run:
         shell: bash
         working-directory: ${{ inputs.working-directory }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          persist-credentials: false
 
       - name: Detect package manager
         id: pm
@@ -296,6 +302,7 @@ jobs:
     name: Test${{ inputs.test-shards > 1 && format(' ({0}/{1})', matrix.shard, inputs.test-shards) || '' }}
     if: ${{ inputs.test-script != '' }}
     runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 60
     defaults:
       run:
         shell: bash
@@ -308,6 +315,8 @@ jobs:
         shard: ${{ fromJSON('{"1":[1],"2":[1,2],"3":[1,2,3],"4":[1,2,3,4],"5":[1,2,3,4,5],"6":[1,2,3,4,5,6],"7":[1,2,3,4,5,6,7],"8":[1,2,3,4,5,6,7,8],"9":[1,2,3,4,5,6,7,8,9],"10":[1,2,3,4,5,6,7,8,9,10]}')[format('{0}', inputs.test-shards)] }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          persist-credentials: false
 
       - name: Detect package manager
         id: pm
@@ -403,6 +412,7 @@ jobs:
     name: Build
     if: ${{ inputs.build-script != '' }}
     runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 60
     defaults:
       run:
         shell: bash
@@ -411,6 +421,8 @@ jobs:
       package-manager: ${{ steps.pm.outputs.name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          persist-credentials: false
 
       - name: Detect package manager
         id: pm

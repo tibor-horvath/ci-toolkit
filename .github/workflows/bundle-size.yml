@@ -97,6 +97,7 @@ jobs:
     name: Bundle size
     if: ${{ github.event_name == 'pull_request' || github.event_name == 'pull_request_target' }}
     runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 60
     outputs:
       head-gzip: ${{ steps.measure.outputs.head_gzip }}
       base-gzip: ${{ steps.measure.outputs.base_gzip }}
@@ -105,11 +106,13 @@ jobs:
       - name: Checkout PR
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
         with:
+          persist-credentials: false
           path: head
 
       - name: Checkout base
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
         with:
+          persist-credentials: false
           ref: ${{ github.event.pull_request.base.sha }}
           path: base
 

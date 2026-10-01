@@ -83,12 +83,15 @@ jobs:
   publish:
     name: Docker Publish
     runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 60
     outputs:
       image: ${{ steps.meta.outputs.image }}
       tags: ${{ steps.meta.outputs.tags }}
       digest: ${{ steps.build.outputs.digest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          persist-credentials: false
 
       - name: Compute image and tag refs
         id: meta

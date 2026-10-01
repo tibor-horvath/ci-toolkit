@@ -98,8 +98,11 @@ jobs:
   build:
     name: Build
     runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
@@ -144,6 +147,7 @@ jobs:
     if: ${{ inputs.run-tests }}
     needs: build
     runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -151,6 +155,8 @@ jobs:
         shard: ${{ fromJSON(inputs.test-matrix != '' && inputs.test-matrix || '[""]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
@@ -234,6 +240,7 @@ jobs:
     if: ${{ always() && inputs.run-tests && inputs.test-summary }}
     needs: test
     runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 15
     outputs:
       total: ${{ steps.agg.outputs.total }}
       passed: ${{ steps.agg.outputs.passed }}

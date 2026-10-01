@@ -42,8 +42,11 @@ jobs:
   actionlint:
     name: actionlint
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          persist-credentials: false
 
       - name: Install actionlint
         shell: bash
@@ -83,8 +86,11 @@ jobs:
   yamllint:
     name: yamllint
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          persist-credentials: false
 
       - name: Install yamllint
         # Bump manually — dependabot does not track versions held in run steps.
@@ -98,8 +104,11 @@ jobs:
   docs-consistency:
     name: Docs match workflow interfaces
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          persist-credentials: false
 
       - name: Check README and docs/
         run: |
@@ -132,10 +141,13 @@ jobs:
   smoke-node-setup:
     name: Smoke - node-setup
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          persist-credentials: false
 
       - name: Set up Node
         id: node
@@ -178,8 +190,11 @@ jobs:
   explicit-permissions:
     name: Workflows declare permissions
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          persist-credentials: false
 
       - name: Check every workflow declares `permissions:`
         shell: bash
@@ -203,8 +218,11 @@ jobs:
   pinned-actions:
     name: Actions are SHA-pinned
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          persist-credentials: false
 
       - name: Check every `uses:` resolves to a full commit SHA
         shell: bash
