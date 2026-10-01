@@ -75,6 +75,13 @@ on:
         description: "Job timeout in minutes (applies to every job in this workflow, except the totals job, fixed at 15)."
         type: number
         default: 60
+      cancel-superseded:
+        description: >-
+          Cancel an in-flight run of this workflow when a newer one starts for
+          the same pull request. Only pull_request events are ever cancelled;
+          push, schedule and release runs always complete.
+        type: boolean
+        default: true
     outputs:
       # All empty unless `test-summary` is enabled — a skipped job contributes
       # empty strings rather than failing the caller's expression.
@@ -97,6 +104,12 @@ on:
 permissions:
   checks: write
   contents: read
+
+# Supersede an in-flight run for the same pull request. The group is prefixed
+# with this workflow's name so it cannot collide with the caller's own group.
+concurrency:
+  group: ${{ github.workflow }}-dotnet-build-test-${{ inputs.build-project }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ inputs.cancel-superseded && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') }}
 
 jobs:
   build:

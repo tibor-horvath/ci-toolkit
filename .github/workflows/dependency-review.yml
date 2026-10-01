@@ -47,10 +47,23 @@ on:
         description: "Job timeout in minutes (applies to every job in this workflow)."
         type: number
         default: 15
+      cancel-superseded:
+        description: >-
+          Cancel an in-flight run of this workflow when a newer one starts for
+          the same pull request. Only pull_request events are ever cancelled;
+          push, schedule and release runs always complete.
+        type: boolean
+        default: true
 
 permissions:
   contents: read
   pull-requests: write
+
+# Supersede an in-flight run for the same pull request. The group is prefixed
+# with this workflow's name so it cannot collide with the caller's own group.
+concurrency:
+  group: ${{ github.workflow }}-dependency-review-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ inputs.cancel-superseded && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') }}
 
 jobs:
   review:
