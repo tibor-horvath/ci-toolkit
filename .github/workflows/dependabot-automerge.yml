@@ -25,6 +25,12 @@ permissions:
   contents: write
   pull-requests: write
 
+# A newer push to the PR supersedes the run in flight; the fresh run re-checks
+# the metadata, so cancelling the old one is safe.
+concurrency:
+  group: dependabot-automerge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   automerge:
     name: Automerge minor and patch
