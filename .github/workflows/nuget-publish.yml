@@ -93,7 +93,7 @@ jobs:
           dotnet-version: ${{ inputs.dotnet-version }}
 
       - name: Cache NuGet packages
-        uses: tibor-horvath/ci-toolkit/.github/actions/cache@v1
+        uses: tibor-horvath/ci-toolkit/.github/actions/cache@336709f20934ec0a9a0535331c201a8ce91f2cbc # v1.14.0
 
       - name: Pack
         id: pack
