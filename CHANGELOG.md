@@ -5,6 +5,13 @@ All notable changes to this project are documented here. The format is based on
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Consumers pin the
 moving major tag `@v1`.
 
+## [1.14.0](https://github.com/tibor-horvath/ci-toolkit/compare/v1.13.1...v1.14.0) (2026-10-01)
+
+
+### Added
+
+* add concurrency settings and cancel superseded runs to workflows ([f9f9987](https://github.com/tibor-horvath/ci-toolkit/commit/f9f9987125787610899a4a4d225890306ef1da9f))
+
 ## [1.13.1](https://github.com/tibor-horvath/ci-toolkit/compare/v1.13.0...v1.13.1) (2026-10-01)
 
 
