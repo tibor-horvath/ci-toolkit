@@ -5,6 +5,17 @@ All notable changes to this project are documented here. The format is based on
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Consumers pin the
 moving major tag `@v1`.
 
+## [1.13.1](https://github.com/tibor-horvath/ci-toolkit/compare/v1.13.0...v1.13.1) (2026-10-01)
+
+
+### Fixed
+
+* bump actions/download-artifact from 4.3.0 to 8.0.1 ([#23](https://github.com/tibor-horvath/ci-toolkit/issues/23)) ([e0401c4](https://github.com/tibor-horvath/ci-toolkit/commit/e0401c49e8b6c7a2455ebf413fd311b1b7c31370))
+* bump actions/upload-artifact from 4.6.2 to 7.0.1 ([#22](https://github.com/tibor-horvath/ci-toolkit/issues/22)) ([9c625ff](https://github.com/tibor-horvath/ci-toolkit/commit/9c625ff6a86bd34d3acb8a01ab5a660dda7ef0cf))
+* bump docker/build-push-action from 6.19.2 to 7.3.0 ([#20](https://github.com/tibor-horvath/ci-toolkit/issues/20)) ([dfc126f](https://github.com/tibor-horvath/ci-toolkit/commit/dfc126f33ff36857414d9f03822b495c4c31f3ac))
+* bump docker/login-action from 3.7.0 to 4.6.0 ([#21](https://github.com/tibor-horvath/ci-toolkit/issues/21)) ([9f92361](https://github.com/tibor-horvath/ci-toolkit/commit/9f92361b3f25b2351d863de39041497bec57488e))
+* bump docker/setup-buildx-action from 3.12.0 to 4.3.0 ([#24](https://github.com/tibor-horvath/ci-toolkit/issues/24)) ([dc8b87e](https://github.com/tibor-horvath/ci-toolkit/commit/dc8b87e8520c98883be0039d11894aca850ee09c))
+
 ## [1.13.0](https://github.com/tibor-horvath/ci-toolkit/compare/v1.12.0...v1.13.0) (2026-10-01)
 
 
