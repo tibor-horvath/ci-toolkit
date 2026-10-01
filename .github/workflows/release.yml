@@ -14,7 +14,16 @@ permissions:
   pull-requests: write
 
 jobs:
+  # `@v1` is a moving tag, so never release a commit that fails its own checks.
+  self-check:
+    name: Self check
+    uses: ./.github/workflows/self-check.yml
+    permissions:
+      checks: write
+      contents: read
+
   release-please:
+    needs: self-check
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

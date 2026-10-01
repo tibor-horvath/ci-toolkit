@@ -12,11 +12,12 @@ name: Self Check
 # job enforces the README's "all third-party actions are SHA-pinned" promise,
 # which actionlint does not check.
 
+# Pushes to main are covered by release.yml, which calls this workflow and only
+# cuts a release if it passes — so there is no `push` trigger here.
 on:
-  push:
-    branches: [main]
   pull_request:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
