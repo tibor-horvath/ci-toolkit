@@ -10,7 +10,11 @@
         { "type": "fix", "section": "Fixed" },
         { "type": "refactor", "section": "Changed" },
         { "type": "perf", "section": "Changed" },
-        { "type": "docs", "section": "Documentation" },
+        { "type": "docs", "section": "Documentation", "hidden": true },
+        { "type": "ci", "section": "Continuous Integration", "hidden": true },
+        { "type": "build", "section": "Build System", "hidden": true },
+        { "type": "test", "section": "Tests", "hidden": true },
+        { "type": "style", "section": "Styles", "hidden": true },
         { "type": "chore", "section": "Miscellaneous", "hidden": true }
       ]
     }
