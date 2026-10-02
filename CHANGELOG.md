@@ -5,6 +5,13 @@ All notable changes to this project are documented here. The format is based on
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Consumers pin the
 moving major tag `@v1`.
 
+## [1.15.1](https://github.com/tibor-horvath/ci-toolkit/compare/v1.15.0...v1.15.1) (2026-10-02)
+
+
+### Documentation
+
+* Add social preview ([#44](https://github.com/tibor-horvath/ci-toolkit/issues/44)) ([85373ab](https://github.com/tibor-horvath/ci-toolkit/commit/85373ab46eedfbf219711ae974c9ea6b21f7d2e0))
+
 ## [1.15.0](https://github.com/tibor-horvath/ci-toolkit/compare/v1.14.0...v1.15.0) (2026-10-01)
 
 
