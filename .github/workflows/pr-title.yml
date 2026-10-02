@@ -1,0 +1,21 @@
+name: PR Title
+
+# Dogfoods pr-title-lint.yml on this repository. PRs are squash-merged, so the
+# title becomes the commit on main that release-please reads — make the
+# "PR title" job a required status check on main to enforce it.
+#
+# `pull_request_target` runs the workflow from the base branch and never checks
+# out PR code, so it is safe and also covers fork PRs. `edited` re-runs the check
+# when only the title changes.
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  title:
+    uses: ./.github/workflows/pr-title-lint.yml
+    permissions:
+      pull-requests: read
