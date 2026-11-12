@@ -1,0 +1,24 @@
+# Path labels for this repo's own PRs (see .github/workflows/pr-paths.yml).
+# Format: https://github.com/actions/labeler#match-object
+
+"area: workflows":
+  - changed-files:
+      - any-glob-to-any-file: ".github/workflows/**"
+
+"area: actions":
+  - changed-files:
+      - any-glob-to-any-file: ".github/actions/**"
+
+"area: scripts":
+  - changed-files:
+      - any-glob-to-any-file: ".github/scripts/**"
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "docs/**"
+          - "**/*.md"
+
+tests:
+  - changed-files:
+      - any-glob-to-any-file: "tests/**"

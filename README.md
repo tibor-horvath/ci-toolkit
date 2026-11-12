@@ -45,6 +45,7 @@ Dependabot. See [Staying up to date](#staying-up-to-date). All third-party actio
 | `dependency-review.yml` | Blocks PRs that add vulnerable or disallowed-licence dependencies | [docs](docs/dependency-review.md) |
 | `pr-title-lint.yml` | Enforces Conventional Commit PR titles (what release-please reads) | [docs](docs/pr-title-lint.md) |
 | `pr-title-labels.yml` | Labels PRs from their Conventional Commit title (`type: feat`, `breaking-change`, optional scopes) | [docs](docs/pr-title-labels.md) |
+| `pr-path-labels.yml` | Labels PRs from the files they change (`actions/labeler` rules, config file or inline) | [docs](docs/pr-path-labels.md) |
 | `dependabot-automerge.yml` | Approves and auto-merges Dependabot PRs within a policy (minor/patch by default); requests review on the rest | [docs](docs/dependabot-automerge.md) |
 | `workflow-lint.yml` | actionlint + shellcheck + SHA-pin check for a repo's own workflows | [docs](docs/workflow-lint.md) |
 | `stale.yml` | Label and close inactive issues and PRs | [docs](docs/stale.md) |
@@ -81,7 +82,7 @@ jobs:
 The CI-style workflows (`node-build-test`, `dotnet-build-test`, `lighthouse-ci`,
 `bundle-size`, `codeql`, `dependency-review`, `secret-scan`, `node-audit`,
 `dotnet-vulnerable-packages`, `dotnet-coverage-comment`, `workflow-lint`,
-`pr-title-lint`, `pr-title-labels`, `dependabot-automerge`) cancel their own in-flight run when a newer one starts for the same pull request, so a push to a
+`pr-title-lint`, `pr-title-labels`, `pr-path-labels`, `dependabot-automerge`) cancel their own in-flight run when a newer one starts for the same pull request, so a push to a
 PR branch no longer leaves the previous run burning minutes. You don't need to
 do anything.
 
