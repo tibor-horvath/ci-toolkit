@@ -1,6 +1,6 @@
 name: PR Title
 
-# Dogfoods pr-title-lint.yml on this repository. PRs are squash-merged, so the
+# Dogfoods pr-title-lint.yml and pr-title-labels.yml on this repository. PRs are squash-merged, so the
 # title becomes the commit on main that release-please reads — make the
 # "PR title" job a required status check on main to enforce it.
 #
@@ -19,3 +19,8 @@ jobs:
     uses: ./.github/workflows/pr-title-lint.yml
     permissions:
       pull-requests: read
+
+  labels:
+    uses: ./.github/workflows/pr-title-labels.yml
+    permissions:
+      pull-requests: write
