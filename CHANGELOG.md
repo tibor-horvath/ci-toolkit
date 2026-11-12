@@ -5,6 +5,20 @@ All notable changes to this project are documented here. The format is based on
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Consumers pin the
 moving major tag `@v1`.
 
+## [1.16.0](https://github.com/tibor-horvath/ci-toolkit/compare/v1.15.0...v1.16.0) (2026-11-12)
+
+
+### Added
+
+* add pr-title-labels workflow to label PRs based on Conventional Commit titles ([#56](https://github.com/tibor-horvath/ci-toolkit/issues/56)) ([1645853](https://github.com/tibor-horvath/ci-toolkit/commit/1645853fd68c51400db7ad1031f2c5510cf4939a))
+
+
+### Fixed
+
+* bump marocchino/sticky-pull-request-comment from 2.9.4 to 3.0.5 ([#50](https://github.com/tibor-horvath/ci-toolkit/issues/50)) ([fd306b9](https://github.com/tibor-horvath/ci-toolkit/commit/fd306b93ad2854fb6c56cde112561070e4d2c8a2))
+* bump the artifact-actions group across 1 directory with 2 updates ([#57](https://github.com/tibor-horvath/ci-toolkit/issues/57)) ([6fac319](https://github.com/tibor-horvath/ci-toolkit/commit/6fac3197775ff192e09f4621e2f7a05d3e4cad8d))
+* enhance Dependabot configuration and improve .NET build script security ([#55](https://github.com/tibor-horvath/ci-toolkit/issues/55)) ([d38ce0b](https://github.com/tibor-horvath/ci-toolkit/commit/d38ce0bca39416ba20bd30997d03c2a8e2e62bd2))
+
 ## [1.15.0](https://github.com/tibor-horvath/ci-toolkit/compare/v1.14.0...v1.15.0) (2026-10-01)
 
 
