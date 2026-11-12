@@ -11,7 +11,7 @@ version: 2
 #   major         -> falls outside the group, so one PR per action. These can
 #                    change action inputs or runtime behavior, and `@v1`
 #                    consumers inherit that on the next release — so each one
-#                    is left for review (dependabot-automerge.yml requests it)
+#                    is left for review (dependabot-pr.yml requests it)
 #                    rather than auto-merged.
 #   artifacts     -> upload-artifact and download-artifact must stay on
 #                    compatible versions, so they always move together in one

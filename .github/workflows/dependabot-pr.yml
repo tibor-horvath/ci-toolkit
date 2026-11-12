@@ -1,0 +1,31 @@
+name: Dependabot PR
+
+# Dogfoods dependabot-automerge.yml on this repository's own Dependabot PRs.
+#
+# Majors are deliberately not merged: `dependabot.yml` already splits them into
+# one PR per action so each gets read, and `@v1` consumers inherit whatever
+# lands here on the next release. The repo owner is requested as a reviewer
+# on them instead.
+#
+# One-time repo setup this depends on:
+#   - Settings > General > Pull Requests > "Allow auto-merge"
+#   - Settings > Actions > General > "Allow GitHub Actions to create and approve
+#     pull requests" (the approval step, for the required-review rule)
+#   - A branch protection rule / ruleset on `main` that requires the
+#     `Self Check` jobs to pass.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  automerge:
+    uses: ./.github/workflows/dependabot-automerge.yml
+    with:
+      # Squash keeps the single conventional-commit title release-please reads.
+      merge-method: squash
+      reviewers: tibor-horvath
+    permissions:
+      contents: write
+      pull-requests: write
