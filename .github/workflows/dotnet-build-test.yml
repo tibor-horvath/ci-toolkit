@@ -122,12 +122,12 @@ jobs:
           persist-credentials: false
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           dotnet-version: ${{ inputs.dotnet-version }}
 
       - name: Cache NuGet packages
-        uses: tibor-horvath/ci-toolkit/.github/actions/cache@336709f20934ec0a9a0535331c201a8ce91f2cbc # v1.14.0
+        uses: tibor-horvath/ci-toolkit/.github/actions/cache@d9c2eac3bfc76a720ed60c343d7432430a3a8c0b # v1.15.0
 
       # Inputs reach the script through env, never `${{ }}` inside `run:` —
       # an interpolated value is spliced into the script text before the shell
@@ -191,7 +191,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           dotnet-version: ${{ inputs.dotnet-version }}
 
@@ -199,7 +199,7 @@ jobs:
       # MSBuild targets/props that packages contribute, without a download.
       # Restore-only: the build job owns the save, so shards never upload dupes.
       - name: Restore NuGet cache
-        uses: tibor-horvath/ci-toolkit/.github/actions/cache@336709f20934ec0a9a0535331c201a8ce91f2cbc # v1.14.0
+        uses: tibor-horvath/ci-toolkit/.github/actions/cache@d9c2eac3bfc76a720ed60c343d7432430a3a8c0b # v1.15.0
         with:
           restore-only: "true"
 
@@ -237,7 +237,7 @@ jobs:
 
       - name: Test summary
         if: ${{ always() }}
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
+        uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a # v3.2.0
         with:
           name: Test Results${{ matrix.shard != '' && format(' ({0})', matrix.shard) || '' }}
           path: "**/TestResults/*.trx"
