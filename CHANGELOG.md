@@ -5,6 +5,19 @@ All notable changes to this project are documented here. The format is based on
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Consumers pin the
 moving major tag `@v1`.
 
+## [1.17.0](https://github.com/tibor-horvath/ci-toolkit/compare/v1.16.1...v1.17.0) (2026-11-12)
+
+
+### Added
+
+* add PR path labels workflow and documentation ([#63](https://github.com/tibor-horvath/ci-toolkit/issues/63)) ([c3cc79b](https://github.com/tibor-horvath/ci-toolkit/commit/c3cc79b570533826576fc9faec07da559d8c9e4d))
+* implement reusable Dependabot automerge workflow and update documentation ([#60](https://github.com/tibor-horvath/ci-toolkit/issues/60)) ([18a89ed](https://github.com/tibor-horvath/ci-toolkit/commit/18a89ed0ffa8d4cf5328bb8e1d3e04b4c5767f03))
+
+
+### Fixed
+
+* bump the actions-minor-patch group across 1 directory with 2 updates ([#62](https://github.com/tibor-horvath/ci-toolkit/issues/62)) ([7f5fd40](https://github.com/tibor-horvath/ci-toolkit/commit/7f5fd4059f93ca0b1e52cb9c192a3bda5c6d4c57))
+
 ## [1.16.1](https://github.com/tibor-horvath/ci-toolkit/compare/v1.16.0...v1.16.1) (2026-11-12)
 
 
