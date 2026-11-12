@@ -1,0 +1,123 @@
+name: PR Path Labels (reusable)
+
+# Labels pull requests from the files they change, using actions/labeler:
+#
+#   docs/setup.md, src/api/client.ts  ->  "documentation", "area: api"
+#
+# The rules live in a labeler config — by default `.github/labeler.yml` in the
+# calling repo, or inline via the `configuration` input. See
+# https://github.com/actions/labeler#match-object for the format.
+#
+# This complements pr-title-labels.yml (labels from the Conventional Commit
+# title); the two manage different labels and can run side by side.
+#
+# Nothing from the PR is checked out or run: the config is read from the base
+# branch (or the `configuration` input) and the changed-file list comes from the
+# API, so `pull_request_target` is safe here and gives fork PRs a token that can
+# write labels.
+#
+# Call it from a consumer repo with:
+#   on:
+#     pull_request_target:
+#       types: [opened, synchronize, reopened]
+#   jobs:
+#     labels:
+#       uses: tibor-horvath/ci-toolkit/.github/workflows/pr-path-labels.yml@v1
+#       permissions: { contents: read, pull-requests: write }
+
+on:
+  workflow_call:
+    inputs:
+      configuration-path:
+        description: "Path of the labeler config in the calling repo, read from the base branch. Ignored when `configuration` is set."
+        type: string
+        default: ".github/labeler.yml"
+      configuration:
+        description: >-
+          Inline labeler config (YAML), used instead of `configuration-path`.
+          Handy for a single rule without adding a file to the repo.
+        type: string
+        default: ""
+      sync-labels:
+        description: >-
+          Remove labels defined in the config whose rules no longer match (e.g.
+          after the matching files are reverted). Labels not in the config are
+          never touched.
+        type: boolean
+        default: false
+      dot:
+        description: "Let globs like `**` match paths that start with a dot (e.g. `.github/`)."
+        type: boolean
+        default: true
+      runs-on:
+        description: "Runner label."
+        type: string
+        default: "ubuntu-latest"
+      timeout-minutes:
+        description: "Job timeout in minutes (applies to every job in this workflow)."
+        type: number
+        default: 15
+      cancel-superseded:
+        description: >-
+          Cancel an in-flight run of this workflow when a newer one starts for
+          the same pull request. Only pull_request events are ever cancelled;
+          push, schedule and release runs always complete.
+        type: boolean
+        default: true
+    outputs:
+      new-labels:
+        description: "Comma-separated labels this run added."
+        value: ${{ jobs.label.outputs.new-labels }}
+      all-labels:
+        description: "Comma-separated labels the PR has after this run."
+        value: ${{ jobs.label.outputs.all-labels }}
+
+permissions:
+  contents: read
+  pull-requests: write
+
+# Supersede an in-flight run for the same pull request. The group is prefixed
+# with this workflow's name so it cannot collide with the caller's own group.
+concurrency:
+  group: ${{ github.workflow }}-pr-path-labels-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ inputs.cancel-superseded && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') }}
+
+jobs:
+  label:
+    name: PR path labels
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    outputs:
+      new-labels: ${{ steps.labeler.outputs.new-labels }}
+      all-labels: ${{ steps.labeler.outputs.all-labels }}
+    steps:
+      - name: Check event
+        if: github.event.pull_request == null
+        run: |
+          echo "::error::pr-path-labels must be triggered by a pull_request or pull_request_target event."
+          exit 1
+
+      # The inline config goes through an env var, never into the script text.
+      - name: Resolve config
+        id: config
+        env:
+          INLINE_CONFIG: ${{ inputs.configuration }}
+          CONFIG_PATH: ${{ inputs.configuration-path }}
+        run: |
+          if [ -n "$INLINE_CONFIG" ]; then
+            path="$RUNNER_TEMP/pr-path-labels.yml"
+            printf '%s\n' "$INLINE_CONFIG" > "$path"
+            echo "path=$path" >> "$GITHUB_OUTPUT"
+          else
+            echo "path=$CONFIG_PATH" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Without a checkout the labeler fetches `configuration-path` through the
+      # API at the event's SHA, which for pull_request_target is the base branch.
+      - name: Label from changed files
+        id: labeler
+        uses: actions/labeler@bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13 # v7.0.0
+        with:
+          configuration-path: ${{ steps.config.outputs.path }}
+          sync-labels: ${{ inputs.sync-labels }}
+          dot: ${{ inputs.dot }}

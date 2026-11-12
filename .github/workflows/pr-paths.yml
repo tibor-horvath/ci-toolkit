@@ -1,0 +1,23 @@
+name: PR Paths
+
+# Dogfoods pr-path-labels.yml on this repository, with the rules in
+# .github/labeler.yml.
+#
+# `pull_request_target` runs the workflow from the base branch and never checks
+# out PR code, so it is safe and also covers fork PRs. `synchronize` re-labels
+# when new commits change which files the PR touches.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  labels:
+    uses: ./.github/workflows/pr-path-labels.yml
+    with:
+      sync-labels: true
+    permissions:
+      contents: read
+      pull-requests: write
