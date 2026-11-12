@@ -5,6 +5,13 @@ All notable changes to this project are documented here. The format is based on
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Consumers pin the
 moving major tag `@v1`.
 
+## [1.16.1](https://github.com/tibor-horvath/ci-toolkit/compare/v1.16.0...v1.16.1) (2026-11-12)
+
+
+### Fixed
+
+* bump the actions-minor-patch group across 1 directory with 14 updates ([#53](https://github.com/tibor-horvath/ci-toolkit/issues/53)) ([3f88b34](https://github.com/tibor-horvath/ci-toolkit/commit/3f88b3447533bab7e2f132f49acd8f3c5f81e52c))
+
 ## [1.16.0](https://github.com/tibor-horvath/ci-toolkit/compare/v1.15.0...v1.16.0) (2026-11-12)
 
 
