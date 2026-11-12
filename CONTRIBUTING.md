@@ -62,13 +62,14 @@ manually:
 
 [`dependabot.yml`](.github/dependabot.yml) opens one grouped PR a week for minor
 and patch bumps of the actions used here, and one PR per action for majors.
-[`dependabot-automerge.yml`](.github/workflows/dependabot-automerge.yml) treats
-them differently:
+[`dependabot-pr.yml`](.github/workflows/dependabot-pr.yml) runs the reusable
+[`dependabot-automerge.yml`](.github/workflows/dependabot-automerge.yml) on them
+and treats them differently:
 
 - **Minor / patch (the grouped PR):** approved and set to auto-merge. GitHub
   merges it once the required checks on `main` pass. A group containing a major
-  is not merged automatically, because the group's update type is its highest
-  bump.
+  is not merged automatically, because every dependency in the PR has to be a
+  minor or patch bump.
 - **Major:** left open, and the repo owner is requested as a reviewer. Read the
   changelog first. `upload-artifact` and `download-artifact` are always grouped
   into one PR, since their versions have to be compatible.

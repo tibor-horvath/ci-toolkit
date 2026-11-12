@@ -1,45 +1,113 @@
-name: Dependabot Automerge
+name: Dependabot Automerge (reusable)
 
-# Auto-approves and auto-merges Dependabot PRs that are minor or patch bumps.
-#
-# Major bumps are deliberately not merged: `dependabot.yml` already splits them
-# into one PR per action so each gets read, and `@v1` consumers inherit whatever
-# lands here on the next release. Instead, the repo owner is requested as a
-# reviewer on them.
+# Approves and auto-merges Dependabot PRs whose every updated dependency is
+# within policy (by default: minor and patch bumps). Anything else (a major, an
+# update with no semver type, or a group containing one) is left for a person:
+# auto-merge is switched off if an earlier run had queued it, and the configured
+# reviewers are requested.
 #
 # `gh pr merge --auto` only queues the merge; GitHub performs it once every
-# required status check on `main` is green. So the gate is the branch protection
-# rule, not this workflow — if `main` requires no checks, `--auto` merges at
-# once.
+# *required* status check is green. So the real gate is the base branch's
+# protection rule or ruleset, not this workflow. If the branch requires no
+# checks, `--auto` merges immediately.
 #
-# One-time repo setup this depends on:
+# Every dependency in the PR is checked, not just the aggregate that
+# dependabot/fetch-metadata reports, so a grouped PR is merged only when all of
+# its members pass the policy.
+#
+# The job runs only when both the PR author and the account that triggered the
+# run are Dependabot. A person pushing to a Dependabot branch changes
+# `github.actor`, so a hand-modified PR is never merged unseen. In a reusable
+# workflow `github.*` is the caller's context, so the guard sees the real event.
+#
+# No PR code is checked out or run: the workflow reads the event payload and
+# calls the GitHub API only.
+#
+# One-time setup in the consumer repo:
 #   - Settings > General > Pull Requests > "Allow auto-merge"
 #   - Settings > Actions > General > "Allow GitHub Actions to create and approve
-#     pull requests" (the approval step, for the required-review rule)
-#   - A branch protection rule / ruleset on `main` that requires the
-#     `Self Check` jobs to pass.
+#     pull requests" (only for `approve: true`)
+#   - A branch protection rule / ruleset on the base branch that requires your
+#     CI checks.
+#
+# Call it from a consumer repo with:
+#   on: pull_request
+#   jobs:
+#     automerge:
+#       uses: tibor-horvath/ci-toolkit/.github/workflows/dependabot-automerge.yml@v1
+#       permissions: { contents: write, pull-requests: write }
 
 on:
-  pull_request:
+  workflow_call:
+    inputs:
+      update-types:
+        description: >-
+          Newline- or comma-separated semver bumps that may be auto-merged:
+          `patch`, `minor`, `major`. Every dependency in the PR must match.
+        type: string
+        default: |
+          minor
+          patch
+      dependency-types:
+        description: >-
+          Newline- or comma-separated dependency types that may be auto-merged:
+          `direct:production`, `direct:development`, `indirect`. Every
+          dependency in the PR must match. Empty -> any type.
+        type: string
+        default: ""
+      merge-method:
+        description: "Merge method for auto-merge: `squash`, `merge` or `rebase`."
+        type: string
+        default: "squash"
+      approve:
+        description: "Approve the PR before enabling auto-merge (for branches that require a review)."
+        type: boolean
+        default: true
+      reviewers:
+        description: >-
+          Newline- or comma-separated users or `org/team` slugs to request a
+          review from when a PR is not auto-merged. Empty -> no request.
+        type: string
+        default: ""
+      runs-on:
+        description: "Runner label."
+        type: string
+        default: "ubuntu-latest"
+      timeout-minutes:
+        description: "Job timeout in minutes (applies to every job in this workflow)."
+        type: number
+        default: 15
+      cancel-superseded:
+        description: >-
+          Cancel an in-flight run of this workflow when a newer one starts for
+          the same pull request. Only pull_request events are ever cancelled;
+          push, schedule and release runs always complete.
+        type: boolean
+        default: true
+    outputs:
+      automerge:
+        description: "`true` when auto-merge was enabled for the PR, `false` when it was left for review. Empty when the PR is not from Dependabot."
+        value: ${{ jobs.automerge.outputs.automerge }}
 
 permissions:
   contents: write
   pull-requests: write
 
 # A newer push to the PR supersedes the run in flight; the fresh run re-checks
-# the metadata, so cancelling the old one is safe.
+# the metadata, so cancelling the old one is safe. The group is prefixed with
+# this workflow's name so it cannot collide with the caller's own group.
 concurrency:
-  group: dependabot-automerge-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-dependabot-automerge-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ inputs.cancel-superseded && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') }}
 
 jobs:
   automerge:
-    name: Automerge minor and patch
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    # `github.actor` is the account that triggered this run; a human pushing to
-    # a Dependabot branch changes it, so a modified PR is not merged unseen.
+    name: Dependabot automerge
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
     if: github.event.pull_request.user.login == 'dependabot[bot]' && github.actor == 'dependabot[bot]'
+    outputs:
+      automerge: ${{ steps.decide.outputs.automerge }}
     steps:
       - name: Fetch Dependabot metadata
         id: metadata
@@ -47,33 +115,121 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Approve and enable auto-merge
-        # For a grouped PR `update-type` is the highest bump in the group, so a
-        # single major inside it keeps the whole PR out.
-        if: steps.metadata.outputs.update-type == 'version-update:semver-minor' || steps.metadata.outputs.update-type == 'version-update:semver-patch'
+      - name: Check every update against the policy
+        id: decide
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_URL: ${{ github.event.pull_request.html_url }}
+          UPDATED_DEPS: ${{ steps.metadata.outputs.updated-dependencies-json }}
+          UPDATE_TYPES: ${{ inputs.update-types }}
+          DEPENDENCY_TYPES: ${{ inputs.dependency-types }}
+          MERGE_METHOD: ${{ inputs.merge-method }}
         run: |
           set -euo pipefail
-          gh pr review --approve "$PR_URL"
-          # Squash keeps the single conventional-commit title release-please reads.
-          gh pr merge --auto --squash "$PR_URL"
 
-      # Everything the step above skips (majors, or a group containing one)
-      # waits for a person, so ask for that review explicitly instead of
-      # relying on someone noticing the open PR. Dependabot's own `reviewers`
-      # setting is retired, so the request is made here.
-      - name: Request review for non-automerged update
-        if: steps.metadata.outputs.update-type != 'version-update:semver-minor' && steps.metadata.outputs.update-type != 'version-update:semver-patch'
+          # Newline/comma-separated list -> compact JSON array of trimmed items.
+          to_json() {
+            tr ',' '\n' <<<"$1" \
+              | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d' \
+              | jq -R . | jq -sc .
+          }
+          update_types=$(to_json "$UPDATE_TYPES")
+          dependency_types=$(to_json "$DEPENDENCY_TYPES")
+
+          bad=$(jq -r '.[] | select(IN("patch", "minor", "major") | not)' <<<"$update_types")
+          if [ -n "$bad" ]; then
+            echo "::error::update-types: unknown value(s): ${bad//$'\n'/, } (expected patch, minor, major)"
+            exit 1
+          fi
+          bad=$(jq -r '.[] | select(IN("direct:production", "direct:development", "indirect") | not)' <<<"$dependency_types")
+          if [ -n "$bad" ]; then
+            echo "::error::dependency-types: unknown value(s): ${bad//$'\n'/, } (expected direct:production, direct:development, indirect)"
+            exit 1
+          fi
+          case "$MERGE_METHOD" in
+            squash|merge|rebase) ;;
+            *) echo "::error::merge-method: expected squash, merge or rebase, got '$MERGE_METHOD'"; exit 1 ;;
+          esac
+
+          deps=${UPDATED_DEPS:-[]}
+          count=$(jq 'length' <<<"$deps")
+
+          # One line per dependency that falls outside the policy. A missing
+          # update type (e.g. a non-semver version) never matches.
+          blocking=$(jq -r --argjson ut "$update_types" --argjson dt "$dependency_types" '
+            .[]
+            | ((.updateType // "") | sub("^version-update:semver-"; "")) as $u
+            | (.dependencyType // "") as $d
+            | select(
+                ($u | IN($ut[]) | not)
+                or (($dt | length) > 0 and ($d | IN($dt[]) | not))
+              )
+            | "- `\(.dependencyName)`: \(if $u == "" then "unknown update type" else $u end), \(if $d == "" then "unknown dependency type" else $d end)"
+          ' <<<"$deps")
+
+          {
+            echo "### Dependabot automerge"
+            echo
+            jq -r '.[] | "- `\(.dependencyName)` \(.prevVersion // "?") → \(.newVersion // "?") (\((.updateType // "unknown") | sub("^version-update:semver-"; "")), \(.dependencyType // "unknown"))"' <<<"$deps"
+            echo
+          } >>"$GITHUB_STEP_SUMMARY"
+
+          if [ "$count" -eq 0 ]; then
+            echo "::notice::Dependabot reported no updated dependencies; leaving the PR for review."
+            echo "Not auto-merged: no dependency metadata." >>"$GITHUB_STEP_SUMMARY"
+            echo "automerge=false" >>"$GITHUB_OUTPUT"
+          elif [ -n "$blocking" ]; then
+            echo "::notice::Outside the auto-merge policy:"$'\n'"$blocking"
+            { echo "Not auto-merged. Outside the policy:"; echo "$blocking"; } >>"$GITHUB_STEP_SUMMARY"
+            echo "automerge=false" >>"$GITHUB_OUTPUT"
+          else
+            echo "All $count update(s) are within policy."
+            echo "Auto-merge enabled ($MERGE_METHOD)." >>"$GITHUB_STEP_SUMMARY"
+            echo "automerge=true" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Approve
+        if: steps.decide.outputs.automerge == 'true' && inputs.approve
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
-          UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
-          REVIEWER: tibor-horvath
+        run: gh pr review --approve "$PR_URL"
+
+      - name: Enable auto-merge
+        if: steps.decide.outputs.automerge == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          MERGE_METHOD: ${{ inputs.merge-method }}
+        run: gh pr merge --auto "--$MERGE_METHOD" "$PR_URL"
+
+      # A grouped PR can gain a major when Dependabot updates it. The earlier run
+      # may already have queued auto-merge, and that would still go through, so
+      # switch it off explicitly.
+      - name: Disable auto-merge queued by an earlier run
+        if: steps.decide.outputs.automerge == 'false'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
         run: |
           set -euo pipefail
-          echo "Update type: ${UPDATE_TYPE:-unknown} — requesting review from ${REVIEWER}"
-          gh pr edit "$PR_URL" --add-reviewer "$REVIEWER"
+          if [ "$(gh pr view "$PR_URL" --json autoMergeRequest --jq '.autoMergeRequest != null')" = "true" ]; then
+            gh pr merge --disable-auto "$PR_URL"
+            echo "::notice::Auto-merge was enabled by an earlier run and has been disabled."
+          fi
+
+      # Dependabot's own `reviewers` setting is retired, so the request is made here.
+      - name: Request review
+        if: steps.decide.outputs.automerge == 'false' && inputs.reviewers != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          REVIEWERS: ${{ inputs.reviewers }}
+        run: |
+          set -euo pipefail
+          list=$(tr ',' '\n' <<<"$REVIEWERS" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d' | paste -sd, -)
+          echo "Requesting review from: $list"
+          gh pr edit "$PR_URL" --add-reviewer "$list"
