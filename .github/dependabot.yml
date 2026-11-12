@@ -11,12 +11,22 @@ version: 2
 #   major         -> falls outside the group, so one PR per action. These can
 #                    change action inputs or runtime behavior, and `@v1`
 #                    consumers inherit that on the next release — so each one
-#                    gets read on its own.
+#                    is left for review (dependabot-automerge.yml requests it)
+#                    rather than auto-merged.
+#   artifacts     -> upload-artifact and download-artifact must stay on
+#                    compatible versions, so they always move together in one
+#                    PR. Listed first: a dependency joins the first group it
+#                    matches. A major in this group keeps the PR out of
+#                    auto-merge, like any other major.
 
 updates:
   - package-ecosystem: "github-actions"
-    # "/" covers .github/workflows/** — not just the repo root.
-    directory: "/"
+    # "/" covers .github/workflows/** only. The composite actions under
+    # .github/actions/* pin third-party actions too (actions/cache,
+    # setup-node, pnpm/action-setup) and are not scanned unless listed here.
+    directories:
+      - "/"
+      - "/.github/actions/*"
 
     schedule:
       interval: "weekly"
@@ -35,6 +45,12 @@ updates:
       prefix: "fix"
 
     groups:
+      artifact-actions:
+        applies-to: version-updates
+        patterns:
+          - "actions/upload-artifact"
+          - "actions/download-artifact"
+
       actions-minor-patch:
         applies-to: version-updates
         patterns:
