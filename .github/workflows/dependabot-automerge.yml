@@ -2,9 +2,10 @@ name: Dependabot Automerge
 
 # Auto-approves and auto-merges Dependabot PRs that are minor or patch bumps.
 #
-# Major bumps are deliberately left alone: `dependabot.yml` already splits them
+# Major bumps are deliberately not merged: `dependabot.yml` already splits them
 # into one PR per action so each gets read, and `@v1` consumers inherit whatever
-# lands here on the next release.
+# lands here on the next release. Instead, the repo owner is requested as a
+# reviewer on them.
 #
 # `gh pr merge --auto` only queues the merge; GitHub performs it once every
 # required status check on `main` is green. So the gate is the branch protection
@@ -59,3 +60,20 @@ jobs:
           gh pr review --approve "$PR_URL"
           # Squash keeps the single conventional-commit title release-please reads.
           gh pr merge --auto --squash "$PR_URL"
+
+      # Everything the step above skips (majors, or a group containing one)
+      # waits for a person, so ask for that review explicitly instead of
+      # relying on someone noticing the open PR. Dependabot's own `reviewers`
+      # setting is retired, so the request is made here.
+      - name: Request review for non-automerged update
+        if: steps.metadata.outputs.update-type != 'version-update:semver-minor' && steps.metadata.outputs.update-type != 'version-update:semver-patch'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
+          REVIEWER: tibor-horvath
+        run: |
+          set -euo pipefail
+          echo "Update type: ${UPDATE_TYPE:-unknown} — requesting review from ${REVIEWER}"
+          gh pr edit "$PR_URL" --add-reviewer "$REVIEWER"

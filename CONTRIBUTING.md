@@ -69,9 +69,9 @@ them differently:
   merges it once the required checks on `main` pass. A group containing a major
   is not merged automatically, because the group's update type is its highest
   bump.
-- **Major:** left open. Read the changelog first; `upload-artifact` and
-  `download-artifact` must be bumped together, since their versions have to be
-  compatible.
+- **Major:** left open, and the repo owner is requested as a reviewer. Read the
+  changelog first. `upload-artifact` and `download-artifact` are always grouped
+  into one PR, since their versions have to be compatible.
 
 Every merge is a `fix(deps):` commit, so release-please cuts a patch release and
 moves `v1`. Consumers get the new action versions without doing anything.
