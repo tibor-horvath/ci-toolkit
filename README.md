@@ -6,7 +6,8 @@
 
 Stack-neutral by name, so pipelines for any language can coexist here.
 
-Pin callers to the moving major tag: **`@v1`**. All third-party actions are SHA-pinned.
+Pin callers to the moving major tag **`@v1`**, or to a commit SHA kept current by
+Dependabot. See [Staying up to date](#staying-up-to-date). All third-party actions are SHA-pinned.
 
 ## Workflows
 
@@ -43,6 +44,7 @@ Pin callers to the moving major tag: **`@v1`**. All third-party actions are SHA-
 | `codeql.yml` | CodeQL static analysis, one job per language, results in Code scanning | [docs](docs/codeql.md) |
 | `dependency-review.yml` | Blocks PRs that add vulnerable or disallowed-licence dependencies | [docs](docs/dependency-review.md) |
 | `pr-title-lint.yml` | Enforces Conventional Commit PR titles (what release-please reads) | [docs](docs/pr-title-lint.md) |
+| `pr-title-labels.yml` | Labels PRs from their Conventional Commit title (`type: feat`, `breaking-change`, optional scopes) | [docs](docs/pr-title-labels.md) |
 | `workflow-lint.yml` | actionlint + shellcheck + SHA-pin check for a repo's own workflows | [docs](docs/workflow-lint.md) |
 | `stale.yml` | Label and close inactive issues and PRs | [docs](docs/stale.md) |
 | `actions-consumption.yml` | Report a run's Actions usage (per OS / per job, optional account balance) | [docs](docs/actions-consumption.md) |
@@ -78,7 +80,7 @@ jobs:
 The CI-style workflows (`node-build-test`, `dotnet-build-test`, `lighthouse-ci`,
 `bundle-size`, `codeql`, `dependency-review`, `secret-scan`, `node-audit`,
 `dotnet-vulnerable-packages`, `dotnet-coverage-comment`, `workflow-lint`,
-`pr-title-lint`) cancel their own in-flight run when a newer one starts for the same pull request, so a push to a
+`pr-title-lint`, `pr-title-labels`) cancel their own in-flight run when a newer one starts for the same pull request, so a push to a
 PR branch no longer leaves the previous run burning minutes. You don't need to
 do anything.
 
@@ -117,3 +119,49 @@ Consumers pin the moving major tag `@v1`. Releases are automated with
 `feat:` bumps the minor, `fix:` the patch; a `!` or `BREAKING CHANGE:` footer
 bumps the major (and you'd then advertise a `@v2` tag). See `CHANGELOG.md` for
 release history.
+
+## Staying up to date
+
+Pick one of two ways to receive new releases.
+
+**Moving tag `@v1`: zero effort, no review.** Every run resolves to the latest
+`v1.x.y`, so fixes land without a PR. A bad release also lands straight away,
+with no gate. The [`workflow-lint`](docs/workflow-lint.md) pin check flags `@v1`,
+so if you use both, set `require-pinned-actions: false`.
+
+```yaml
+uses: tibor-horvath/ci-toolkit/.github/workflows/dotnet-build-test.yml@v1
+```
+
+**SHA pin + Dependabot: reviewed and reversible (recommended).** Pin the call
+to a release commit, keeping the version in a trailing comment:
+
+```yaml
+uses: tibor-horvath/ci-toolkit/.github/workflows/dotnet-build-test.yml@<commit-sha> # v1.15.0
+```
+
+Then let Dependabot bump it. The `github-actions` ecosystem covers
+reusable-workflow calls too. It matches this repo's `vX.Y.Z` tags and updates
+both the SHA and the comment:
+
+```yaml
+# .github/dependabot.yml
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"            # scans .github/workflows/**
+    schedule:
+      interval: "weekly"
+    groups:
+      ci-toolkit:
+        patterns:
+          - "tibor-horvath/ci-toolkit*"
+```
+
+Each release then arrives as one PR that you can review, test, and revert. This
+setup also passes the `workflow-lint` pin check. Renovate supports the same
+approach (`helpers:pinGitHubActionDigests`).
+
+**Major versions.** `@v1` never moves to `v2`: switch to `@v2` by hand after
+reading the breaking changes in `CHANGELOG.md`. With a SHA pin, Dependabot opens
+the major bump as its own PR.

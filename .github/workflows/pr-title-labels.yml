@@ -1,0 +1,191 @@
+name: PR Title Labels (reusable)
+
+# Labels pull requests from their Conventional Commit title:
+#
+#   feat(api)!: drop v1 endpoints  ->  "type: feat", "breaking-change"
+#                                      (+ "scope: api" with scope-labels: true)
+#
+# When the title changes, labels this workflow manages but no longer match are
+# removed, so a PR retitled from `fix:` to `feat:` does not end up with both.
+# Labels it does not manage (anything outside the prefixes / mapping below, and
+# release-please's `autorelease: *`) are never touched. A title that is not a
+# Conventional Commit leaves the labels as they are — pair this with
+# pr-title-lint.yml to fail such titles.
+#
+# This is a separate workflow from pr-title-lint.yml on purpose: it needs
+# `pull-requests: write`, and a reusable workflow that asks for more than its
+# caller grants fails to start, so folding it into the lint would break every
+# existing caller that grants `read`.
+#
+# The script reads only the title and body from the event payload and never
+# checks out or runs PR code, so `pull_request_target` is safe here and gives
+# fork PRs a token that can write labels.
+#
+# Call it from a consumer repo with:
+#   on:
+#     pull_request_target:
+#       types: [opened, edited, reopened]
+#   jobs:
+#     labels:
+#       uses: tibor-horvath/ci-toolkit/.github/workflows/pr-title-labels.yml@v1
+#       permissions: { pull-requests: write }
+
+on:
+  workflow_call:
+    inputs:
+      types:
+        description: >-
+          Newline-separated types that get a type label, e.g. `feat` and `fix`.
+          Other types get none (the breaking and scope labels still apply).
+          Empty -> every type.
+        type: string
+        default: ""
+      type-label-prefix:
+        description: "Prefix for type labels: `feat` becomes `<prefix>feat`. Types listed in `type-labels` use their mapped name instead."
+        type: string
+        default: "type: "
+      type-labels:
+        description: >-
+          Newline-separated `type=label` overrides, e.g. `feat=enhancement` and
+          `fix=bug`. Map a type to an empty label (`chore=`) to skip it.
+        type: string
+        default: ""
+      breaking-label:
+        description: "Label for breaking changes (`type!:` in the title, or a `BREAKING CHANGE:` footer in the body). Empty -> no breaking label."
+        type: string
+        default: "breaking-change"
+      scope-labels:
+        description: "Also add a `<scope-label-prefix><scope>` label for the title's `(scope)`."
+        type: boolean
+        default: false
+      scope-label-prefix:
+        description: "Prefix for scope labels."
+        type: string
+        default: "scope: "
+      runs-on:
+        description: "Runner label."
+        type: string
+        default: "ubuntu-latest"
+      timeout-minutes:
+        description: "Job timeout in minutes (applies to every job in this workflow)."
+        type: number
+        default: 15
+      cancel-superseded:
+        description: >-
+          Cancel an in-flight run of this workflow when a newer one starts for
+          the same pull request. Only pull_request events are ever cancelled;
+          push, schedule and release runs always complete.
+        type: boolean
+        default: true
+
+permissions:
+  pull-requests: write
+
+# Supersede an in-flight run for the same pull request. The group is prefixed
+# with this workflow's name so it cannot collide with the caller's own group.
+concurrency:
+  group: ${{ github.workflow }}-pr-title-labels-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ inputs.cancel-superseded && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') }}
+
+jobs:
+  label:
+    name: PR title labels
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    steps:
+      - name: Sync labels with the title
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          TYPES: ${{ inputs.types }}
+          TYPE_PREFIX: ${{ inputs.type-label-prefix }}
+          TYPE_LABELS: ${{ inputs.type-labels }}
+          BREAKING_LABEL: ${{ inputs.breaking-label }}
+          SCOPE_LABELS: ${{ inputs.scope-labels }}
+          SCOPE_PREFIX: ${{ inputs.scope-label-prefix }}
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            if (!pr) {
+              core.setFailed('pr-title-labels must be triggered by a pull_request or pull_request_target event.');
+              return;
+            }
+
+            const env = process.env;
+            const typePrefix = env.TYPE_PREFIX ?? '';
+            const scopePrefix = env.SCOPE_PREFIX ?? '';
+            const breakingLabel = (env.BREAKING_LABEL ?? '').trim();
+            const withScopes = env.SCOPE_LABELS === 'true';
+
+            // `type=label` overrides; an empty label means "no label for this type".
+            const overrides = new Map();
+            for (const raw of (env.TYPE_LABELS ?? '').split('\n')) {
+              const line = raw.trim();
+              if (!line) continue;
+              const eq = line.indexOf('=');
+              if (eq < 1) {
+                core.setFailed(`type-labels: expected "type=label", got "${line}".`);
+                return;
+              }
+              overrides.set(line.slice(0, eq).trim().toLowerCase(), line.slice(eq + 1).trim());
+            }
+
+            // Types that get a type label; empty means all of them.
+            const allowed = new Set(
+              (env.TYPES ?? '').split('\n').map(t => t.trim().toLowerCase()).filter(Boolean),
+            );
+
+            const typeLabel = (type) => {
+              if (allowed.size && !allowed.has(type)) return '';
+              return overrides.has(type) ? overrides.get(type) : `${typePrefix}${type}`;
+            };
+
+            // Which existing labels this workflow owns and may remove.
+            const overrideTargets = new Set([...overrides.values()].filter(Boolean));
+            const isManaged = (name) =>
+              (typePrefix && name.startsWith(typePrefix)) ||
+              overrideTargets.has(name) ||
+              (breakingLabel && name === breakingLabel) ||
+              (withScopes && scopePrefix && name.startsWith(scopePrefix));
+
+            const title = pr.title ?? '';
+            const match = /^(\w+)(?:\(([^)]*)\))?(!)?: \S/.exec(title);
+            if (!match) {
+              core.notice(`Title is not a Conventional Commit, labels left unchanged: "${title}"`);
+              return;
+            }
+            const [, rawType, rawScope, bang] = match;
+            const type = rawType.toLowerCase();
+
+            const wanted = new Set();
+            const tl = typeLabel(type);
+            if (tl) wanted.add(tl);
+            const breaking = Boolean(bang) || /^BREAKING[ -]CHANGE: /m.test(pr.body ?? '');
+            if (breaking && breakingLabel) wanted.add(breakingLabel);
+            if (withScopes && rawScope) {
+              for (const scope of rawScope.split(',').map(s => s.trim()).filter(Boolean)) {
+                wanted.add(`${scopePrefix}${scope}`);
+              }
+            }
+
+            const { owner, repo } = context.repo;
+            const issue_number = pr.number;
+            const current = (pr.labels ?? []).map(l => l.name);
+
+            const toRemove = current.filter(name => isManaged(name) && !wanted.has(name));
+            const toAdd = [...wanted].filter(name => !current.includes(name));
+
+            for (const name of toRemove) {
+              try {
+                await github.rest.issues.removeLabel({ owner, repo, issue_number, name });
+              } catch (err) {
+                // Already gone (removed by hand, or a concurrent run) is fine.
+                if (err.status !== 404) throw err;
+              }
+            }
+            // Labels that do not exist yet are created with a default colour.
+            if (toAdd.length) {
+              await github.rest.issues.addLabels({ owner, repo, issue_number, labels: toAdd });
+            }
+
+            core.info(`Added: ${toAdd.join(', ') || '(none)'}`);
+            core.info(`Removed: ${toRemove.join(', ') || '(none)'}`);
