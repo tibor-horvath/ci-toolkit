@@ -1,0 +1,148 @@
+name: NuGet publish
+description: >-
+  Pack a .NET solution/project and push every package to a NuGet feed, with
+  nuget.org Trusted Publishing (OIDC) or an API key.
+
+# Composite action — call it right after `actions/checkout`, in a job that
+# grants `id-token: write`:
+#
+#   jobs:
+#     publish:
+#       runs-on: ubuntu-latest
+#       permissions:
+#         contents: read
+#         id-token: write
+#       steps:
+#         - uses: actions/checkout@v4
+#           with:
+#             persist-credentials: false
+#         - uses: tibor-horvath/ci-toolkit/.github/actions/nuget-publish@v2
+#           with:
+#             nuget-user: ${{ vars.NUGET_USER }}
+#
+# Why an action and not only the reusable nuget-publish.yml workflow: nuget.org
+# requires the OIDC `job_workflow_ref` claim to start with
+# <owner>/<repo>/.github/workflows/ of the repository named in the Trusted
+# Publishing policy. In a job of a reusable workflow from another repository
+# that claim names the called workflow (tibor-horvath/ci-toolkit/...), so the
+# token exchange fails with HTTP 401. A composite action runs inside the
+# caller's own job, so the claim names the caller's workflow file.
+
+inputs:
+  dotnet-version:
+    description: ".NET SDK version to install. Empty skips actions/setup-dotnet."
+    default: "10.0.x"
+  project:
+    description: "Solution or project to pack. Empty → SDK auto-discovers the root .sln/.slnx."
+    default: ""
+  configuration:
+    description: "Build configuration."
+    default: "Release"
+  version:
+    description: >-
+      Package version. Empty → the release tag (github.ref_name) with any
+      leading 'v' stripped (e.g. v3.1.0 → 3.1.0).
+    default: ""
+  nuget-source:
+    description: "NuGet feed to push to."
+    default: "https://api.nuget.org/v3/index.json"
+  nuget-user:
+    description: >-
+      nuget.org username (profile name, not email) that owns the Trusted
+      Publishing policy. When set, the push uses a short-lived API key from
+      NuGet/login instead of `nuget-api-key`.
+    default: ""
+  nuget-api-key:
+    description: "Long-lived API key for the feed. Required unless `nuget-user` is set."
+    default: ""
+  include-symbols:
+    description: "Also produce and push .snupkg symbol packages."
+    default: "false"
+  cache:
+    description: "Restore/save the NuGet package cache."
+    default: "true"
+
+outputs:
+  version:
+    description: "The version actually packed."
+    value: ${{ steps.pack.outputs.version }}
+  packages:
+    description: "Comma-separated .nupkg filenames that were packed and pushed."
+    value: ${{ steps.pack.outputs.packages }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check credentials
+      shell: bash
+      env:
+        NUGET_USER: ${{ inputs.nuget-user }}
+        HAS_KEY: ${{ inputs.nuget-api-key != '' }}
+      run: |
+        if [ -z "$NUGET_USER" ] && [ "$HAS_KEY" != "true" ]; then
+          echo "::error::No NuGet credentials: set nuget-user (Trusted Publishing) or nuget-api-key."
+          exit 1
+        fi
+
+    - name: Setup .NET
+      if: ${{ inputs.dotnet-version != '' }}
+      uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+      with:
+        dotnet-version: ${{ inputs.dotnet-version }}
+
+    - name: Cache NuGet packages
+      if: ${{ inputs.cache == 'true' }}
+      uses: tibor-horvath/ci-toolkit/.github/actions/cache@d9c2eac3bfc76a720ed60c343d7432430a3a8c0b # v1.15.0
+
+    - name: Pack
+      id: pack
+      shell: bash
+      env:
+        PROJECT: ${{ inputs.project }}
+        CONFIG: ${{ inputs.configuration }}
+        INPUT_VERSION: ${{ inputs.version }}
+        SYMBOLS: ${{ inputs.include-symbols }}
+      run: |
+        version="$INPUT_VERSION"
+        [ -z "$version" ] && version="${GITHUB_REF_NAME#v}"
+        echo "Packing version: $version"
+
+        out="$RUNNER_TEMP/nuget-publish"
+        args=(pack)
+        [ -n "$PROJECT" ] && args+=("$PROJECT")
+        args+=(-c "$CONFIG" -o "$out"
+               -p:PackageVersion="$version"
+               -p:ContinuousIntegrationBuild=true)
+        if [ "$SYMBOLS" = "true" ]; then
+          args+=(-p:IncludeSymbols=true -p:SymbolPackageFormat=snupkg)
+        fi
+        dotnet "${args[@]}"
+        ls -1 "$out"
+
+        pkgs=$(find "$out" -maxdepth 1 -name '*.nupkg' -printf '%f\n' \
+          | sort | paste -sd, -)
+        {
+          echo "version=${version}"
+          echo "packages=${pkgs}"
+          echo "dir=${out}"
+        } >> "$GITHUB_OUTPUT"
+
+    # Requested right before the push: the temporary key is valid for 1 hour.
+    - name: NuGet login (OIDC → temporary API key)
+      id: login
+      if: ${{ inputs.nuget-user != '' }}
+      uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+      with:
+        user: ${{ inputs.nuget-user }}
+
+    - name: Push
+      shell: bash
+      env:
+        SOURCE: ${{ inputs.nuget-source }}
+        DIR: ${{ steps.pack.outputs.dir }}
+        NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY || inputs.nuget-api-key }}
+      run: |
+        dotnet nuget push "$DIR/*.nupkg" \
+          --source "$SOURCE" \
+          --api-key "$NUGET_API_KEY" \
+          --skip-duplicate

@@ -5,11 +5,18 @@ name: NuGet Publish (reusable)
 # non-package projects with <IsPackable>false</IsPackable> so only real
 # packages are produced.
 #
-# Authentication: set `nuget-user` to use nuget.org Trusted Publishing (OIDC →
-# short-lived API key, no stored secret), or pass the `nuget-api-key` secret.
-# The job requests `id-token: write`, so the caller must grant it either way.
+# Authentication: pass the `nuget-api-key` secret.
 #
-# Example (publish on release, Trusted Publishing):
+# nuget.org Trusted Publishing does NOT work through this workflow: nuget.org
+# requires the OIDC `job_workflow_ref` claim to start with the caller's
+# <owner>/<repo>/.github/workflows/, but a job in a reusable workflow from
+# another repository reports this file (tibor-horvath/ci-toolkit/...), so the
+# token exchange fails with HTTP 401. For Trusted Publishing use the composite
+# action instead, which runs in the caller's own job:
+#   uses: tibor-horvath/ci-toolkit/.github/actions/nuget-publish@v2
+# Setting `nuget-user` here fails fast with a pointer to it.
+#
+# Example (publish on release, API key):
 #   on:
 #     release:
 #       types: [published]
@@ -17,12 +24,9 @@ name: NuGet Publish (reusable)
 #     contents: read
 #   jobs:
 #     publish:
-#       permissions:
-#         contents: read
-#         id-token: write
 #       uses: tibor-horvath/ci-toolkit/.github/workflows/nuget-publish.yml@v2
-#       with:
-#         nuget-user: ${{ vars.NUGET_USER }}
+#       secrets:
+#         nuget-api-key: ${{ secrets.NUGET_API_KEY }}
 
 on:
   workflow_call:
@@ -53,9 +57,11 @@ on:
         default: "https://api.nuget.org/v3/index.json"
       nuget-user:
         description: >-
-          nuget.org username (profile name, not email) that owns the Trusted
-          Publishing policy. When set, the push uses a short-lived API key from
-          NuGet/login instead of the `nuget-api-key` secret.
+          Unsupported here — nuget.org rejects the OIDC token of a job inside a
+          cross-repository reusable workflow. Setting it fails the run with a
+          pointer to the `.github/actions/nuget-publish` composite action, which
+          supports Trusted Publishing. Kept only so existing callers get that
+          error instead of an unknown-input failure.
         type: string
         default: ""
       include-symbols:
@@ -83,8 +89,7 @@ on:
     secrets:
       nuget-api-key:
         description: >-
-          Long-lived API key for the target NuGet feed. Required unless
-          `nuget-user` is set (Trusted Publishing).
+          API key for the target NuGet feed. Required.
         required: false
 
 permissions:
@@ -97,11 +102,25 @@ jobs:
     timeout-minutes: ${{ inputs.timeout-minutes }}
     permissions:
       contents: read
-      id-token: write # Trusted Publishing: GitHub OIDC token for NuGet/login
     outputs:
       version: ${{ steps.pack.outputs.version }}
       packages: ${{ steps.pack.outputs.packages }}
     steps:
+      - name: Check credentials
+        shell: bash
+        env:
+          NUGET_USER: ${{ inputs.nuget-user }}
+          HAS_KEY: ${{ secrets.nuget-api-key != '' }}
+        run: |
+          if [ -n "$NUGET_USER" ]; then
+            echo "::error::nuget-user (Trusted Publishing) cannot work through this reusable workflow: nuget.org requires the OIDC job_workflow_ref to be in your repository. Use the composite action instead: uses: tibor-horvath/ci-toolkit/.github/actions/nuget-publish@v2 (see docs/nuget-publish.md)."
+            exit 1
+          fi
+          if [ "$HAS_KEY" != "true" ]; then
+            echo "::error::No NuGet credentials: pass the nuget-api-key secret."
+            exit 1
+          fi
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
         with:
           persist-credentials: false
@@ -147,24 +166,12 @@ jobs:
             echo "packages=${pkgs}"
           } >> "$GITHUB_OUTPUT"
 
-      # Requested right before the push: the temporary key is valid for 1 hour.
-      - name: NuGet login (OIDC → temporary API key)
-        id: login
-        if: inputs.nuget-user != ''
-        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
-        with:
-          user: ${{ inputs.nuget-user }}
-
       - name: Push
         shell: bash
         env:
           SOURCE: ${{ inputs.nuget-source }}
-          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY || secrets.nuget-api-key }}
+          NUGET_API_KEY: ${{ secrets.nuget-api-key }}
         run: |
-          if [ -z "$NUGET_API_KEY" ]; then
-            echo "::error::No NuGet credentials: set the nuget-user input (Trusted Publishing) or pass the nuget-api-key secret."
-            exit 1
-          fi
           dotnet nuget push "artifacts/*.nupkg" \
             --source "$SOURCE" \
             --api-key "$NUGET_API_KEY" \
