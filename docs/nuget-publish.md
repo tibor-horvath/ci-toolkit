@@ -11,11 +11,27 @@ Reusable NuGet pack + push. Packs once and pushes every resulting package with
 | `configuration` | `Release` | Build configuration |
 | `version` | `''` | Package version. Empty → release tag with leading `v` stripped |
 | `nuget-source` | nuget.org | Feed to push to |
+| `nuget-user` | `''` | nuget.org profile name for Trusted Publishing. Set → OIDC login instead of `nuget-api-key` |
 | `include-symbols` | `false` | Also pack + push `.snupkg` |
 | `runs-on` | `ubuntu-latest` | Runner label |
 | `timeout-minutes` | `60` | Job timeout in minutes |
 
-Requires the `nuget-api-key` secret. Typically triggered on `release: published`.
+Typically triggered on `release: published`.
+
+## Authentication
+
+**Trusted Publishing (recommended).** Set `nuget-user`; the job exchanges a
+GitHub OIDC token for a 1-hour API key via
+[`NuGet/login`](https://github.com/NuGet/login), so no secret is stored. On
+nuget.org → your username → **Trusted Publishing**, add a policy with the
+repository owner, repository name and the **caller's** workflow file name
+(e.g. `publish-nuget.yml`, file name only).
+
+**API key.** Pass the `nuget-api-key` secret and leave `nuget-user` empty.
+nuget.org now discourages long-lived keys for CI, and they expire.
+
+Either way the job requests `id-token: write`, so the calling job must grant it
+(a reusable workflow cannot receive more permissions than its caller gives).
 
 ## Outputs
 
@@ -30,9 +46,12 @@ empty it is derived from the release tag, so the caller does not know it up fron
 ```yaml
 jobs:
   publish:
-    uses: tibor-horvath/ci-toolkit/.github/workflows/nuget-publish.yml@v1
-    secrets:
-      nuget-api-key: ${{ secrets.NUGET_API_KEY }}
+    permissions:
+      contents: read
+      id-token: write
+    uses: tibor-horvath/ci-toolkit/.github/workflows/nuget-publish.yml@v2
+    with:
+      nuget-user: ${{ vars.NUGET_USER }}
 
   announce:
     needs: publish
@@ -51,7 +70,10 @@ permissions:
   contents: read
 jobs:
   publish:
-    uses: tibor-horvath/ci-toolkit/.github/workflows/nuget-publish.yml@v1
-    secrets:
-      nuget-api-key: ${{ secrets.NUGET_API_KEY }}
+    permissions:
+      contents: read
+      id-token: write
+    uses: tibor-horvath/ci-toolkit/.github/workflows/nuget-publish.yml@v2
+    with:
+      nuget-user: ${{ vars.NUGET_USER }}
 ```

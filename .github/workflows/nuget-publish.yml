@@ -5,7 +5,11 @@ name: NuGet Publish (reusable)
 # non-package projects with <IsPackable>false</IsPackable> so only real
 # packages are produced.
 #
-# Example (publish on release):
+# Authentication: set `nuget-user` to use nuget.org Trusted Publishing (OIDC →
+# short-lived API key, no stored secret), or pass the `nuget-api-key` secret.
+# The job requests `id-token: write`, so the caller must grant it either way.
+#
+# Example (publish on release, Trusted Publishing):
 #   on:
 #     release:
 #       types: [published]
@@ -13,9 +17,12 @@ name: NuGet Publish (reusable)
 #     contents: read
 #   jobs:
 #     publish:
-#       uses: tibor-horvath/ci-toolkit/.github/workflows/nuget-publish.yml@v1
-#       secrets:
-#         nuget-api-key: ${{ secrets.NUGET_API_KEY }}
+#       permissions:
+#         contents: read
+#         id-token: write
+#       uses: tibor-horvath/ci-toolkit/.github/workflows/nuget-publish.yml@v2
+#       with:
+#         nuget-user: ${{ vars.NUGET_USER }}
 
 on:
   workflow_call:
@@ -44,6 +51,13 @@ on:
         description: "NuGet feed to push to."
         type: string
         default: "https://api.nuget.org/v3/index.json"
+      nuget-user:
+        description: >-
+          nuget.org username (profile name, not email) that owns the Trusted
+          Publishing policy. When set, the push uses a short-lived API key from
+          NuGet/login instead of the `nuget-api-key` secret.
+        type: string
+        default: ""
       include-symbols:
         description: "Also produce and push .snupkg symbol packages."
         type: boolean
@@ -68,8 +82,10 @@ on:
         value: ${{ jobs.publish.outputs.packages }}
     secrets:
       nuget-api-key:
-        description: "API key for the target NuGet feed."
-        required: true
+        description: >-
+          Long-lived API key for the target NuGet feed. Required unless
+          `nuget-user` is set (Trusted Publishing).
+        required: false
 
 permissions:
   contents: read
@@ -79,6 +95,9 @@ jobs:
     name: NuGet Publish
     runs-on: ${{ inputs.runs-on }}
     timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: read
+      id-token: write # Trusted Publishing: GitHub OIDC token for NuGet/login
     outputs:
       version: ${{ steps.pack.outputs.version }}
       packages: ${{ steps.pack.outputs.packages }}
@@ -128,12 +147,24 @@ jobs:
             echo "packages=${pkgs}"
           } >> "$GITHUB_OUTPUT"
 
+      # Requested right before the push: the temporary key is valid for 1 hour.
+      - name: NuGet login (OIDC → temporary API key)
+        id: login
+        if: inputs.nuget-user != ''
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+        with:
+          user: ${{ inputs.nuget-user }}
+
       - name: Push
         shell: bash
         env:
           SOURCE: ${{ inputs.nuget-source }}
-          NUGET_API_KEY: ${{ secrets.nuget-api-key }}
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY || secrets.nuget-api-key }}
         run: |
+          if [ -z "$NUGET_API_KEY" ]; then
+            echo "::error::No NuGet credentials: set the nuget-user input (Trusted Publishing) or pass the nuget-api-key secret."
+            exit 1
+          fi
           dotnet nuget push "artifacts/*.nupkg" \
             --source "$SOURCE" \
             --api-key "$NUGET_API_KEY" \
