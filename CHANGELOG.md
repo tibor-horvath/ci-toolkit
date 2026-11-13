@@ -5,6 +5,17 @@ All notable changes to this project are documented here. The format is based on
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Consumers pin the
 moving major tag `@v1`.
 
+## [2.0.0](https://github.com/tibor-horvath/ci-toolkit/compare/v1.17.0...v2.0.0) (2026-11-13)
+
+
+### ⚠ BREAKING CHANGES
+
+* **nuget-publish:** the publish job now requests `id-token: write`. A reusable workflow can't have more permissions than its caller grants, so every caller must add this to the calling job, even in API-key mode:
+
+### Added
+
+* **nuget-publish:** support nuget.org Trusted Publishing ([#64](https://github.com/tibor-horvath/ci-toolkit/issues/64)) ([8307a0d](https://github.com/tibor-horvath/ci-toolkit/commit/8307a0de11f26df79c59021ef5afe0b86892ae4d))
+
 ## [1.17.0](https://github.com/tibor-horvath/ci-toolkit/compare/v1.16.1...v1.17.0) (2026-11-12)
 
 
