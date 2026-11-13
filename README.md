@@ -16,7 +16,7 @@ Dependabot. See [Staying up to date](#staying-up-to-date). All third-party actio
 | Workflow | Purpose | Docs |
 |---|---|---|
 | `dotnet-build-test.yml` | .NET build + test — build-once/test-in-parallel sharding, coverage, trx report | [docs](docs/dotnet-build-test.md) |
-| `nuget-publish.yml` | NuGet pack + push (idempotent, `--skip-duplicate`) | [docs](docs/nuget-publish.md) |
+| `nuget-publish.yml` | NuGet pack + push with an API key (idempotent, `--skip-duplicate`). For Trusted Publishing use the `nuget-publish` action | [docs](docs/nuget-publish.md) |
 | `dotnet-vulnerable-packages.yml` | NuGet vulnerability check, direct + transitive, fails on findings | [docs](docs/dotnet-vulnerable-packages.md) |
 | `dotnet-coverage-comment.yml` | Sticky PR comment with the merged code-coverage summary from `dotnet-build-test` | [docs](docs/dotnet-coverage-comment.md) |
 
@@ -52,6 +52,7 @@ Dependabot. See [Staying up to date](#staying-up-to-date). All third-party actio
 | `actions-consumption.yml` | Report a run's Actions usage (per OS / per job, optional account balance) | [docs](docs/actions-consumption.md) |
 | `.github/actions/cache` | Composite action: NuGet + build-output caching with restore-key fallbacks | [docs](docs/caching.md) |
 | `.github/actions/node-setup` | Composite action: package-manager detection, pnpm/corepack, Node + dependency cache, frozen install | [docs](docs/node-setup.md) |
+| `.github/actions/nuget-publish` | Composite action: NuGet pack + push with nuget.org Trusted Publishing (OIDC) or an API key | [docs](docs/nuget-publish.md) |
 
 Each doc page lists the workflow's inputs/secrets and copy-paste caller examples.
 
