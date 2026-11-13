@@ -5,6 +5,13 @@ All notable changes to this project are documented here. The format is based on
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Consumers pin the
 moving major tag `@v1`.
 
+## [2.1.0](https://github.com/tibor-horvath/ci-toolkit/compare/v2.0.0...v2.1.0) (2026-11-13)
+
+
+### Added
+
+* **nuget-publish:** add composite action for Trusted Publishing ([#66](https://github.com/tibor-horvath/ci-toolkit/issues/66)) ([54ff4a2](https://github.com/tibor-horvath/ci-toolkit/commit/54ff4a24736e4396941207135f82d0200c8c8746))
+
 ## [2.0.0](https://github.com/tibor-horvath/ci-toolkit/compare/v1.17.0...v2.0.0) (2026-11-13)
 
 
