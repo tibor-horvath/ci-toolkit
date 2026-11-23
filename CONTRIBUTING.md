@@ -26,7 +26,7 @@ every PR must pass it.
 4. Pin third-party actions to a full SHA with the version as a trailing comment
    (`uses: owner/repo@<sha> # v4`).
 5. Use [Conventional Commits](https://www.conventionalcommits.org/); release
-   automation derives the version bump from them (see the README).
+   automation derives the version bump from them (see [Releasing](#releasing)).
 
 ### Deliberately inheriting the caller's permissions
 
@@ -49,6 +49,22 @@ registry decides the scope), omit `permissions:` and add this comment so
 
 If you add an input that changes runtime behaviour, extend a fixture or the
 smoke job's `with:` so the new path is exercised.
+
+## Releasing
+
+Consumers pin the moving major tag `@v1`. Releases are automated with
+[release-please](https://github.com/googleapis/release-please) (`release.yml`):
+
+1. Push [Conventional Commits](https://www.conventionalcommits.org/) to `main`
+   (`feat:`, `fix:`, `refactor:`, `docs:`, …).
+2. release-please maintains a **release PR** that bumps the version and updates
+   `CHANGELOG.md`.
+3. Merging that PR tags `vX.Y.Z`, cuts a GitHub release, and the workflow
+   repoints **`v1`** at it — so `@v1` consumers get the change automatically.
+
+`feat:` bumps the minor, `fix:` the patch; a `!` or `BREAKING CHANGE:` footer
+bumps the major (and you'd then advertise a `@v2` tag). See `CHANGELOG.md` for
+release history.
 
 ## Versions that are bumped by hand
 

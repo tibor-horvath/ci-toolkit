@@ -80,12 +80,9 @@ jobs:
 
 ## Cancel superseded runs
 
-The CI-style workflows (`node-build-test`, `dotnet-build-test`, `lighthouse-ci`,
-`bundle-size`, `codeql`, `dependency-review`, `secret-scan`, `node-audit`,
-`dotnet-vulnerable-packages`, `dotnet-coverage-comment`, `workflow-lint`,
-`pr-title-lint`, `pr-title-labels`, `pr-path-labels`, `dependabot-automerge`) cancel their own in-flight run when a newer one starts for the same pull request, so a push to a
-PR branch no longer leaves the previous run burning minutes. You don't need to
-do anything.
+Every workflow that runs on pull requests cancels its own in-flight run when a
+newer one starts for the same PR, so a push to a PR branch no longer leaves the
+previous run burning minutes. You don't need to do anything.
 
 - Only `pull_request` / `pull_request_target` runs are cancelled. Runs on
   `main`, schedules and releases always complete.
@@ -106,22 +103,6 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 ```
-
-## Versioning & releases
-
-Consumers pin the moving major tag `@v1`. Releases are automated with
-[release-please](https://github.com/googleapis/release-please) (`release.yml`):
-
-1. Push [Conventional Commits](https://www.conventionalcommits.org/) to `main`
-   (`feat:`, `fix:`, `refactor:`, `docs:`, …).
-2. release-please maintains a **release PR** that bumps the version and updates
-   `CHANGELOG.md`.
-3. Merging that PR tags `vX.Y.Z`, cuts a GitHub release, and the workflow
-   repoints **`v1`** at it — so `@v1` consumers get the change automatically.
-
-`feat:` bumps the minor, `fix:` the patch; a `!` or `BREAKING CHANGE:` footer
-bumps the major (and you'd then advertise a `@v2` tag). See `CHANGELOG.md` for
-release history.
 
 ## Staying up to date
 
