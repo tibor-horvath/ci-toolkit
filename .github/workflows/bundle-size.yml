@@ -137,6 +137,7 @@ jobs:
         id: pm
         env:
           PM_INPUT: ${{ inputs.package-manager }}
+          WD_INPUT: ${{ inputs.working-directory }}
         working-directory: head/${{ inputs.working-directory }}
         run: |
           pm="$PM_INPUT"
@@ -154,6 +155,12 @@ jobs:
           esac
           echo "name=$pm" >> "$GITHUB_OUTPUT"
           echo "lockfile=$lock" >> "$GITHUB_OUTPUT"
+          # setup-node's cache glob rejects "." and ".." segments mid-path, so the default
+          # working-directory "." must not become "head/./package-lock.json".
+          wd="${WD_INPUT#./}"
+          wd="${wd%/}"
+          if [ "$wd" = "." ]; then wd=""; fi
+          echo "lockfile-path=head/${wd:+$wd/}$lock" >> "$GITHUB_OUTPUT"
 
       - name: Setup pnpm
         if: ${{ steps.pm.outputs.name == 'pnpm' }}
@@ -172,7 +179,7 @@ jobs:
           node-version: ${{ inputs.node-version-file == '' && inputs.node-version || '' }}
           node-version-file: ${{ inputs.node-version-file != '' && format('head/{0}', inputs.node-version-file) || '' }}
           cache: ${{ steps.pm.outputs.name }}
-          cache-dependency-path: head/${{ inputs.working-directory }}/${{ steps.pm.outputs.lockfile }}
+          cache-dependency-path: ${{ steps.pm.outputs.lockfile-path }}
 
       # One loop for both trees so they are built identically. The base may use
       # an older lockfile, which is why it is installed on its own rather than
