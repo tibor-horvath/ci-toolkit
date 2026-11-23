@@ -5,6 +5,17 @@ All notable changes to this project are documented here. The format is based on
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Consumers pin the
 moving major tag `@v1`.
 
+## [2.1.1](https://github.com/tibor-horvath/ci-toolkit/compare/v2.1.0...v2.1.1) (2026-11-23)
+
+
+### Fixed
+
+* bump actions/dependency-review-action ([#69](https://github.com/tibor-horvath/ci-toolkit/issues/69)) ([503b6e6](https://github.com/tibor-horvath/ci-toolkit/commit/503b6e6e4ff102e7726503e8af9f65e1a92d8009))
+* bump the actions-minor-patch group across 2 directories with 2 updates ([#68](https://github.com/tibor-horvath/ci-toolkit/issues/68)) ([5f3d1f0](https://github.com/tibor-horvath/ci-toolkit/commit/5f3d1f0b3b1e45e9313f6e551392d69ed77b2c36))
+* bump tibor-horvath/ci-toolkit/.github/actions/cache ([#70](https://github.com/tibor-horvath/ci-toolkit/issues/70)) ([6db638b](https://github.com/tibor-horvath/ci-toolkit/commit/6db638b859b48f38bc82567840cae73df25c3f30))
+* bump tibor-horvath/ci-toolkit/.github/actions/cache ([#71](https://github.com/tibor-horvath/ci-toolkit/issues/71)) ([67d57ef](https://github.com/tibor-horvath/ci-toolkit/commit/67d57ef078f453b87d4aff892e074aebfb47ccd1))
+* **bundle-size:** drop "./" from the lockfile cache path ([#72](https://github.com/tibor-horvath/ci-toolkit/issues/72)) ([a84da32](https://github.com/tibor-horvath/ci-toolkit/commit/a84da32cd40697c4a0decd199a82b8b272652d85))
+
 ## [2.1.0](https://github.com/tibor-horvath/ci-toolkit/compare/v2.0.0...v2.1.0) (2026-11-13)
 
 
